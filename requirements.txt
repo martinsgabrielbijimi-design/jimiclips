@@ -1,6 +1,4 @@
 streamlit
 faster-whisper
-google-genai
 pydantic
-yt-dlp
 opencv-python-headless
