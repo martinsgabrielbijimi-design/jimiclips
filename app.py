@@ -10,7 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Automatically write cookies.txt from Streamlit Secrets if provided
+# Automatically write cookies.txt from Streamlit Secrets if configured
 if "YOUTUBE_COOKIES" in st.secrets:
     cookie_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
     with open(cookie_file_path, "w", encoding="utf-8") as f:
@@ -19,17 +19,13 @@ if "YOUTUBE_COOKIES" in st.secrets:
 st.title("🎬 JimiClips AI Video Studio")
 st.markdown("Transform long-form content into high-definition vertical shorts (1080p, Lanczos, CRF 18).")
 
-tab_url, tab_upload = st.tabs(["🔗 Paste YouTube URL", "📁 Upload Local Video File"])
+tab_upload, tab_url = st.tabs(["📁 Upload Local Video File (Recommended)", "🔗 Paste YouTube URL"])
 
 target_input = None
 
-with tab_url:
-    url_val = st.text_input("YouTube or Direct Video URL:", placeholder="https://www.youtube.com/watch?v=...")
-    if url_val.strip():
-        target_input = url_val.strip()
-
 with tab_upload:
-    uploaded_file = st.file_uploader("Upload an MP4, MOV, or MKV directly:", type=["mp4", "mov", "mkv"])
+    st.caption("Direct upload is immune to YouTube's cloud datacenter IP blocks.")
+    uploaded_file = st.file_uploader("Upload an MP4, MOV, or MKV file:", type=["mp4", "mov", "mkv"])
     if uploaded_file is not None:
         save_path = "uploaded_source.mp4"
         with open(save_path, "wb") as f:
@@ -37,9 +33,15 @@ with tab_upload:
         target_input = save_path
         st.success("File uploaded and ready for processing.")
 
+with tab_url:
+    st.caption("Works if your cookies.txt is valid or YouTube has not flagged the current cloud node.")
+    url_val = st.text_input("YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
+    if url_val.strip() and not target_input:
+        target_input = url_val.strip()
+
 if st.button("Generate Clip", type="primary"):
     if not target_input:
-        st.warning("Please provide a URL or upload a video file first.")
+        st.warning("Please provide a video file or YouTube URL first.")
     else:
         status_box = st.empty()
         log_box = st.empty()
@@ -77,4 +79,10 @@ if st.button("Generate Clip", type="primary"):
                     mime="video/mp4"
                 )
         else:
-            status_box.error("Processing failed. Review the terminal logs above.")
+            if "YOUTUBE_IP_BLOCK" in full_logs or "HTTP Error 403" in full_logs:
+                status_box.error(
+                    "YouTube blocked this cloud server instance (403 Forbidden). "
+                    "Switch to the '📁 Upload Local Video File' tab to process your video directly without restrictions."
+                )
+            else:
+                status_box.error("Processing failed. Review the terminal logs above.")
