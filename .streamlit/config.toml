@@ -1,10 +1,15 @@
 [server]
 maxUploadSize = 1024
+maxMessageSize = 1024
 enableCORS = false
-enableXsrfProtection = true
+enableXsrfProtection = false
+headless = true
+
+[browser]
+gatherUsageStats = false
 
 [theme]
-primaryColor = "#6366F1"
+primaryColor = "#10B981"
 backgroundColor = "#0F172A"
 secondaryBackgroundColor = "#1E293B"
 textColor = "#F8FAFC"
