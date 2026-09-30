@@ -6,10 +6,10 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
-    print(f"[JimiClips Engine] {msg}", flush=True)
+    print(f"[JimiClips LiteEngine] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
-    log("Extracting high-precision 16kHz PCM audio stream...")
+    log("Extracting lightweight audio stream...")
     cmd = [
         "ffmpeg", "-y",
         "-i", video_file,
@@ -22,119 +22,92 @@ def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     return audio_file
 
-def transcribe_audio_segments(audio_file):
-    # Using 'base.en' instead of 'tiny.en' drastically reduces word mishearings and hallucinations
-    log("Transcribing dialogue via Faster-Whisper (base.en)...")
-    model = WhisperModel("base.en", device="cpu", compute_type="int8")
+def find_viral_window(audio_file, target_duration=45):
+    """
+    Rapidly scans the audio waveform in memory to find the highest-energy punchline window
+    WITHOUT running heavy neural speech models on the whole file.
+    """
+    log("Scanning audio waveform for highest energy/reaction beat...")
+    sample_rate = 16000
+    
+    with open(audio_file, "rb") as f:
+        f.seek(44)  # Skip standard WAV header
+        raw_data = f.read()
+
+    audio_data = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
+    total_sec = len(audio_data) / sample_rate
+
+    if total_sec <= target_duration:
+        return 0.0, total_sec
+
+    # Group into 1-second energy buckets
+    step = sample_rate
+    num_buckets = int(len(audio_data) / step)
+    reshaped = audio_data[:num_buckets * step].reshape((num_buckets, step))
+    rms_profile = np.sqrt(np.mean(reshaped ** 2, axis=1))
+
+    window_len = int(target_duration)
+    best_start = 0
+    max_score = -1.0
+
+    # Step through timeline every 2 seconds
+    for s in range(0, len(rms_profile) - window_len, 2):
+        chunk = rms_profile[s : s + window_len]
+        total_energy = float(np.sum(chunk))
+        peak = float(np.max(chunk))
+        avg = float(np.mean(chunk)) + 1e-5
+        
+        # Reward high sustained energy + spike
+        score = total_energy * (1.0 + min(peak / avg, 2.0))
+        if score > max_score:
+            max_score = score
+            best_start = s
+
+    log(f"Locked peak action beat: {best_start}s to {best_start + target_duration}s")
+    return float(best_start), float(target_duration)
+
+def transcribe_window_only(audio_file, clip_start, clip_duration):
+    """
+    Transcribes strictly the 30-50s clip window using base.en.
+    Saves massive amounts of CPU and prevents throttling.
+    """
+    log("Transcribing targeted clip window (base.en, int8)...")
+    sample_rate = 16000
+    start_byte = 44 + int(clip_start * sample_rate * 2)
+    len_bytes = int(clip_duration * sample_rate * 2)
 
     with open(audio_file, "rb") as f:
-        f.seek(44)
-        raw_data = f.read()
-    audio_np = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
+        f.seek(start_byte)
+        raw_data = f.read(len_bytes)
 
-    segments_gen, _ = model.transcribe(
-        audio_np,
-        beam_size=5,
+    clip_audio = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
+
+    model = WhisperModel("base.en", device="cpu", compute_type="int8", cpu_threads=2)
+    segments_raw, _ = model.transcribe(
+        clip_audio,
+        beam_size=3,
         word_timestamps=True,
-        condition_on_previous_text=False,
-        vad_filter=True  # Strips ambient mic noise and phantom murmurs
+        condition_on_previous_text=False
     )
 
     segments = []
-    for s in segments_gen:
+    for s in segments_raw:
         txt = s.text.strip()
         if txt:
             segments.append({
                 "start": float(s.start),
                 "end": float(s.end),
-                "text": txt,
-                "words": getattr(s, "words", [])
+                "text": txt
             })
 
-    log(f"Speech transcription complete: {len(segments)} segments mapped.")
-    return segments, audio_np
+    log(f"Targeted transcription complete: {len(segments)} dialogue lines.")
+    return segments
 
-def find_narrative_climax(segments, audio_np, target_duration=45, min_dur=30, max_dur=55):
+def generate_safe_subtitles(segments, clip_duration, ass_path="subtitles.ass"):
     """
-    Selects a complete narrative arc:
-    - Starts at a sentence hook (0-2s)
-    - Captures the primary dialogue/action peak
-    - Locks the ending to a terminal punctuation mark (. ! ?) so punchlines are never severed mid-word.
+    Generates dynamic captions positioned in the upper safe-zone
+    to avoid colliding with bottom graphics or TikTok UI.
     """
-    log("Scanning dialogue beats to lock complete setup-to-punchline climax...")
-    sample_rate = 16000
-    total_seconds = len(audio_np) / sample_rate
-
-    if total_seconds <= max_dur:
-        log("Media length is under max duration; keeping entire video.")
-        return 0.0, total_seconds
-
-    if not segments:
-        log("No speech segments detected; utilizing audio energy envelope fallback.")
-        step = sample_rate
-        num_windows = int(len(audio_np) / step)
-        trimmed = audio_np[:num_windows * step].reshape((num_windows, step))
-        rms = np.sqrt(np.mean(trimmed ** 2, axis=1))
-        w = int(target_duration)
-        best_s = 0
-        best_score = -1.0
-        for s in range(0, len(rms) - w, 2):
-            score = float(np.sum(rms[s:s+w]))
-            if score > best_score:
-                best_score = score
-                best_s = s
-        return float(best_s), float(target_duration)
-
-    best_start = segments[0]["start"]
-    best_end = min(total_seconds, best_start + target_duration)
-    highest_score = -1.0
-    terminal_punct = re.compile(r'[.!?]$')
-
-    for i, s_seg in enumerate(segments):
-        start_time = max(0.0, s_seg["start"] - 0.2)
-
-        for j in range(i, len(segments)):
-            e_seg = segments[j]
-            duration = e_seg["end"] - start_time
-
-            if duration < min_dur:
-                continue
-            if duration > max_dur:
-                break
-
-            # Prioritize clean completion on sentence punctuation
-            has_clean_terminal = bool(terminal_punct.search(e_seg["text"]))
-
-            s_idx = int(start_time * sample_rate)
-            e_idx = int(e_seg["end"] * sample_rate)
-            chunk = audio_np[s_idx:e_idx]
-            energy = np.sqrt(np.mean(chunk ** 2)) if len(chunk) > 0 else 0.0
-
-            word_count = sum(len(s["text"].split()) for s in segments[i:j+1])
-            speech_density = word_count / duration
-
-            score = (energy * 100.0) + (speech_density * 1.5)
-            if has_clean_terminal:
-                score *= 1.45  # Enforces complete thought closure
-
-            if score > highest_score:
-                highest_score = score
-                best_start = start_time
-                best_end = e_seg["end"] + 0.4  # Trailing breathing room for final syllable
-
-    best_end = min(total_seconds, best_end)
-    final_dur = best_end - best_start
-    log(f"Locked complete beat: {best_start:.2f}s to {best_end:.2f}s (Duration: {final_dur:.2f}s)")
-    return best_start, final_dur
-
-def generate_ass_subtitles(segments, clip_start, clip_duration, ass_path="subtitles.ass"):
-    """
-    Builds mobile safe-zone kinetic subtitles.
-    MarginV is set to 920 to keep text cleanly in the upper-middle frame,
-    preventing any collision with existing lower-third burned-in titles.
-    """
-    log("Building kinetic subtitles positioned in upper safe zone...")
-
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -148,7 +121,6 @@ Style: Highlight,Impact,82,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
-    clip_end = clip_start + clip_duration
     events = []
 
     def format_time(t):
@@ -158,70 +130,50 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         return f"{hrs:01d}:{mins:02d}:{secs:05.2f}"
 
     for seg in segments:
-        if seg["end"] < clip_start or seg["start"] > clip_end:
+        s_start = max(0.0, seg["start"])
+        s_end = min(clip_duration, seg["end"])
+
+        if s_end - s_start < 0.2:
             continue
 
-        start_rel = max(0.0, seg["start"] - clip_start)
-        end_rel = min(clip_duration, seg["end"] - clip_start)
-
-        if end_rel - start_rel < 0.2:
-            continue
-
-        words = seg["text"].strip().split()
+        words = seg["text"].split()
         if not words:
             continue
 
         chunk_size = 3
-        dur_per_word = (end_rel - start_rel) / len(words)
+        dur_word = (s_end - s_start) / len(words)
 
         for i in range(0, len(words), chunk_size):
             chunk = words[i:i + chunk_size]
-            sub_start = start_rel + (i * dur_per_word)
-            sub_end = min(end_rel, sub_start + (len(chunk) * dur_per_word))
+            sub_start = s_start + (i * dur_word)
+            sub_end = min(s_end, sub_start + (len(chunk) * dur_word))
 
-            highlight_word = max(chunk, key=len)
+            highlight = max(chunk, key=len)
             formatted = []
             for w in chunk:
                 clean_w = re.sub(r'\W+', '', w)
-                if clean_w.lower() == re.sub(r'\W+', '', highlight_word).lower() and len(clean_w) > 3:
+                if clean_w.lower() == re.sub(r'\W+', '', highlight).lower() and len(clean_w) > 3:
                     formatted.append(f"{{\\rHighlight}}{w.upper()}{{\\rDefault}}")
                 else:
                     formatted.append(w.upper())
 
-            line_text = " ".join(formatted)
-            events.append(f"Dialogue: 0,{format_time(sub_start)},{format_time(sub_end)},Default,,0,0,0,,{line_text}")
+            events.append(f"Dialogue: 0,{format_time(sub_start)},{format_time(sub_end)},Default,,0,0,0,,{' '.join(formatted)}")
 
     with open(ass_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(events) + "\n")
 
     return ass_path
 
-def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, framing_mode="smart_center", output_clip="final_clip.mp4"):
-    log(f"Rendering unified 1080x1920 vertical master ({clip_duration:.1f}s, Mode: {framing_mode})...")
+def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
+    log(f"Rendering 1080x1920 cut using low-overhead filter ({clip_duration:.1f}s)...")
 
-    # Unified Framing Pipeline:
-    # - 'smart_center': Keeps original subject centered with an ambient blurred fill behind it.
-    #   Guarantees no horizontal chopping, stretching, or severed characters.
-    # - 'tight_crop': Standard direct 9:16 center crop.
-    if framing_mode == "smart_center":
-        filter_complex = (
-            f"[0:v]split=2[bg_raw][fg_raw];"
-            f"[bg_raw]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.15[bg];"
-            f"[fg_raw]scale=1080:-1:flags=bicubic[fg];"
-            f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-            f"eq=saturation=1.10:contrast=1.04,"
-            f"unsharp=5:5:0.6:5:5:0.0,"
-            f"ass={ass_file}[vout];"
-            f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
-        )
-    else:  # tight_crop
-        filter_complex = (
-            f"[0:v]crop=ih*(9/16):ih,scale=1080:1920:flags=bicubic,"
-            f"eq=saturation=1.10:contrast=1.04,"
-            f"unsharp=5:5:0.6:5:5:0.0,"
-            f"ass={ass_file}[vout];"
-            f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
-        )
+    # Unified 9:16 Crop with bicubic scaling (no dual-screen slice, minimal CPU strain)
+    filter_complex = (
+        f"[0:v]crop=ih*(9/16):ih,scale=1080:1920:flags=bicubic,"
+        f"eq=saturation=1.08:contrast=1.03,"
+        f"ass={ass_file}[vout];"
+        f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
+    )
 
     cmd = [
         "ffmpeg", "-y",
@@ -233,24 +185,22 @@ def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, frami
         "-map", "[aout]",
         "-c:v", "libx264",
         "-profile:v", "high",
-        "-level:v", "4.2",
-        "-crf", "18",
-        "-preset", "veryfast",
-        "-threads", "2",
+        "-crf", "19",
+        "-preset", "ultrafast",   # Prevents CPU choking on throttled tier
+        "-threads", "1",          # Keeps CPU within safe single-core quota
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "160k",
         "-ar", "44100",
         output_clip
     ]
 
     subprocess.run(cmd, check=True)
-    log(f"Master render successfully completed -> {output_clip}")
+    log(f"Render complete -> {output_clip}")
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
     target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 45
-    framing_mode = sys.argv[3] if len(sys.argv) > 3 else "smart_center"
 
     audio_path = "extracted.wav"
     ass_path = "subtitles.ass"
@@ -263,22 +213,22 @@ def main():
             except Exception:
                 pass
 
-    # 1. Audio stream extraction
+    # 1. Fast audio dump
     extract_audio(input_file, audio_path)
 
-    # 2. Base.en Whisper transcription with VAD noise-filtering
-    segments, audio_np = transcribe_audio_segments(audio_path)
+    # 2. Instant energy scan without Whisper
+    clip_start, clip_duration = find_viral_window(audio_path, target_duration=target_dur)
 
-    # 3. Punctuation-locked narrative window selection
-    clip_start, clip_duration = find_narrative_climax(segments, audio_np, target_duration=target_dur)
+    # 3. Whisper transcribes ONLY the selected 45s moment
+    segments = transcribe_window_only(audio_path, clip_start, clip_duration)
 
-    # 4. Generate subtitles in upper safe-zone
-    generate_ass_subtitles(segments, clip_start, clip_duration, ass_path)
+    # 4. Generate kinetic subtitles in safe zone
+    generate_safe_subtitles(segments, clip_duration, ass_path)
 
-    # 5. Composite unified 1080x1920 vertical master
-    render_vertical_clip(input_file, clip_start, clip_duration, ass_path, framing_mode, output_clip)
+    # 5. Fast, single-thread 1080x1920 render
+    render_vertical_clip(input_file, clip_start, clip_duration, ass_path, output_clip)
 
-    log("Execution complete.")
+    log("Pipeline complete.")
 
 if __name__ == "__main__":
     main()
