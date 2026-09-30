@@ -1,14 +1,20 @@
 import sys
-import faster_whisper
-import streamlit as st
 import os
 import subprocess
+import faster_whisper
+import streamlit as st
 
 st.set_page_config(
     page_title="JimiClips Studio",
     page_icon="🎬",
     layout="centered"
 )
+
+# Automatically write cookies.txt from Streamlit Secrets if provided
+if "YOUTUBE_COOKIES" in st.secrets:
+    cookie_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
+    with open(cookie_file_path, "w", encoding="utf-8") as f:
+        f.write(st.secrets["YOUTUBE_COOKIES"])
 
 st.title("🎬 JimiClips AI Video Studio")
 st.markdown("Transform long-form content into high-definition vertical shorts (1080p, Lanczos, CRF 18).")
@@ -39,7 +45,7 @@ if st.button("Generate Clip", type="primary"):
         log_box = st.empty()
         status_box.info("Running JimiClips pipeline...")
 
-        # Explicitly run using Streamlit's internal python virtual environment
+        # Explicitly run using Streamlit's virtualenv Python executable
         cmd = [sys.executable, "bot.py", target_input]
         
         process = subprocess.Popen(
