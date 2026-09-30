@@ -53,19 +53,27 @@ with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/film-reel.png", width=64)
     st.markdown("### ⚙️ Video Engine Settings")
     
-    clip_duration = st.slider("Clip Duration (seconds)", min_value=15, max_value=60, value=30, step=5)
+    # Clip duration: up to 300 seconds (5 minutes), default 120 seconds (2 minutes)
+    clip_duration = st.slider(
+        "Clip Duration (seconds)",
+        min_value=30,
+        max_value=300,
+        value=130,
+        step=10,
+        help="Supports long clips over 2 minutes."
+    )
     start_offset = st.number_input("Start Time Offset (seconds)", min_value=0, value=0, step=5)
     
     st.markdown("---")
     st.markdown("### 🎨 Visual Fidelity")
     quality_profile = st.selectbox(
         "Quality Preset",
-        ["Ultra-Clear (CRF 17, Slow, Pristine)", "Balanced (CRF 18, Fast)", "Compact (CRF 22)"],
+        ["Ultra-Clear (CRF 17, Pristine)", "Balanced (CRF 18, Fast)", "Compact (CRF 22)"],
         index=0
     )
     
     crf_map = {
-        "Ultra-Clear (CRF 17, Slow, Pristine)": "17",
+        "Ultra-Clear (CRF 17, Pristine)": "17",
         "Balanced (CRF 18, Fast)": "18",
         "Compact (CRF 22)": "22"
     }
@@ -82,9 +90,9 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown('<div class="metric-card"><div class="metric-title">Max Upload</div><div class="metric-val">1024 MB (1 GB)</div></div>', unsafe_allow_html=True)
 with col2:
-    st.markdown('<div class="metric-card"><div class="metric-title">Output Canvas</div><div class="metric-val">1080 × 1920 (9:16)</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="metric-card"><div class="metric-title">Clip Range</div><div class="metric-val">Up to 5 Minutes</div></div>', unsafe_allow_html=True)
 with col3:
-    st.markdown('<div class="metric-card"><div class="metric-title">Scaling Algorithm</div><div class="metric-val">Lanczos Spline</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="metric-card"><div class="metric-title">Scaling Engine</div><div class="metric-val">Lanczos 1080×1920</div></div>', unsafe_allow_html=True)
 
 st.write("")
 st.write("")
@@ -102,23 +110,21 @@ if uploaded_file is not None:
     
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        generate_clicked = st.button("🚀 Render 1080p Vertical Short", type="primary", use_container_width=True)
+        generate_clicked = st.button("🚀 Render 1080p Vertical Clip", type="primary", use_container_width=True)
 
     if generate_clicked:
         save_path = "uploaded_source.mp4"
         output_clip_path = "final_clip.mp4"
         
-        # Stream file to disk in 8MB chunks to keep RAM consumption low
         with st.status("📥 Saving source to disk buffer...", expanded=True) as status:
             with open(save_path, "wb") as f:
                 while chunk := uploaded_file.read(8 * 1024 * 1024):
                     f.write(chunk)
             
-            status.update(label="⚙️ Running JimiClips pipeline (Whisper + FFmpeg Lanczos)...", state="running")
+            status.update(label=f"⚙️ Rendering {clip_duration}s vertical clip (Whisper + FFmpeg Lanczos)...", state="running")
             
             log_container = st.empty()
             
-            # Execute bot.py with parameters: <input_path> <start_sec> <duration_sec> <crf>
             cmd = [
                 sys.executable, "bot.py",
                 save_path,
@@ -157,12 +163,18 @@ if uploaded_file is not None:
                 st.video(output_clip_path)
             
             with res_col2:
-                st.success("✨ **Encoding Details:**\n- Resolution: 1080x1920\n- Frame Rate: 30/60 fps preserved\n- Audio: 320kbps AAC stereo\n- Compression: Visually lossless H.264")
+                st.success(
+                    f"✨ **Encoding Details:**\n"
+                    f"- Length: {clip_duration} seconds\n"
+                    f"- Resolution: 1080x1920 (9:16)\n"
+                    f"- Audio: 320kbps AAC stereo\n"
+                    f"- Quality Profile: CRF {selected_crf}"
+                )
                 with open(output_clip_path, "rb") as f:
                     st.download_button(
                         label="⬇️ Download High-Bitrate Clip",
                         data=f,
-                        file_name="jimiclip_1080p.mp4",
+                        file_name="jimiclip_master.mp4",
                         mime="video/mp4",
                         type="primary",
                         use_container_width=True
