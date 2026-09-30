@@ -10,6 +10,10 @@ def log(msg):
 def download_video(url, output_filename="source.mp4"):
     log("Fetching video stream via authenticated client...")
     
+    # Locate cookies.txt using absolute directory path
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cookie_path = os.path.join(base_dir, "cookies.txt")
+    
     ydl_opts = {
         'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
         'outtmpl': output_filename,
@@ -20,24 +24,22 @@ def download_video(url, output_filename="source.mp4"):
         'geo_bypass': True,
         'extractor_args': {
             'youtube': {
-                'player_client': ['tv_embedded', 'android_creator', 'web'],
-                'player_skip': ['configs'],
+                'player_client': ['web', 'tv_embedded', 'android_creator'],
             }
         }
     }
     
-    # Use cookies if provided to bypass datacenter 403 Forbidden blocks
-    if os.path.exists("cookies.txt"):
-        log("Using authenticated cookies.txt session.")
-        ydl_opts['cookiefile'] = "cookies.txt"
+    if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
+        log(f"Found cookies file at: {cookie_path}")
+        ydl_opts['cookiefile'] = cookie_path
     else:
-        log("No cookies.txt found; attempting standard bypass.")
+        log("No valid cookies.txt detected. Attempting unauthenticated bypass.")
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
         
     if not os.path.exists(output_filename) or os.path.getsize(output_filename) == 0:
-        raise RuntimeError("Downloaded file is empty. Verify that cookies.txt is present and up to date.")
+        raise RuntimeError("Downloaded file is empty. Verify that cookies.txt is valid or use direct upload.")
         
     log("Source download complete.")
     return output_filename
@@ -72,6 +74,7 @@ def transcribe_audio(audio_file="extracted.wav"):
 def process_vertical_clip(input_video="source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=30):
     log("Rendering 1080x1920 vertical video (Lanczos scaling + CRF 18)...")
     
+    # 9:16 Center crop + Lanczos scaling + visually lossless CRF 18
     vf_filter = (
         "crop=ih*(9/16):ih,scale=1080:1920:flags=lanczos,"
         "setsar=1"
@@ -101,6 +104,7 @@ def main():
 
     target = sys.argv[1]
     
+    # Clear leftover media files from previous jobs
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
