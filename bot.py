@@ -8,7 +8,6 @@ def log(msg):
     print(f"[JimiClips] {msg}", flush=True)
 
 def find_cookie_file():
-    """Look for cookies.txt in multiple common working paths."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
         os.path.join(base_dir, "cookies.txt"),
@@ -21,49 +20,44 @@ def find_cookie_file():
     return None
 
 def download_video(url, output_filename="source.mp4"):
-    log("Initializing download pipeline...")
+    log("Connecting via cloud-bypass client...")
     
     cookie_file = find_cookie_file()
     
+    # Priority order:
+    # 1. Direct progressive MP4 streams (itags 22, 18) - immune to CDN 403 fragment drops
+    # 2. DASH streams <= 1080p fallback
     ydl_opts = {
-        # Select best available pre-merged stream or separate streams up to 1080p
-        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+        'format': '18/22/bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
         'overwrites': True,
         'quiet': False,
         'no_warnings': True,
         'geo_bypass': True,
-        # Allow yt-dlp to manage matching client headers natively (avoids CDN 403)
         'extractor_args': {
             'youtube': {
-                'player_client': ['android_creator', 'android', 'web'],
+                # Android VR and TV clients deliver non-throttled progressive streams to datacenters
+                'player_client': ['android_vr', 'tv_embedded', 'android'],
+                'player_skip': ['webpage', 'configs'],
             }
         },
-        # Mitigate cloud IP throttling
+        'http_chunk_size': 10485760,  # 10MB chunking avoids socket kill
         'socket_timeout': 30,
-        'retries': 5,
-        'fragment_retries': 5,
+        'retries': 10,
     }
     
     if cookie_file:
-        log(f"Authenticated session loaded from: {cookie_file}")
+        log(f"Session cookies loaded from: {cookie_file}")
         ydl_opts['cookiefile'] = cookie_file
     else:
-        log("No cookies.txt detected. Running unauthenticated request.")
+        log("No cookies file detected. Using bypass client profile.")
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except yt_dlp.utils.DownloadError as err:
-        log(f"Download failed: {err}")
-        raise RuntimeError(
-            "YouTube blocked the datacenter IP (HTTP 403). "
-            "To resolve: provide a fresh cookies.txt or upload the video directly via the Upload tab."
-        ) from err
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
         
     if not os.path.exists(output_filename) or os.path.getsize(output_filename) == 0:
-        raise RuntimeError("Output file is empty after download completed.")
+        raise RuntimeError("Downloaded media file is empty. Target URL might be unavailable or geoblocked.")
         
     log("Source download complete.")
     return output_filename
@@ -98,6 +92,7 @@ def transcribe_audio(audio_file="extracted.wav"):
 def process_vertical_clip(input_video="source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=30):
     log("Rendering 1080x1920 vertical video (Lanczos scaling + CRF 18)...")
     
+    # 9:16 Center crop + Lanczos scaling + visually lossless CRF 18
     vf_filter = (
         "crop=ih*(9/16):ih,scale=1080:1920:flags=lanczos,"
         "setsar=1"
@@ -127,7 +122,6 @@ def main():
 
     target = sys.argv[1]
     
-    # Clean previous run temporary files
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
