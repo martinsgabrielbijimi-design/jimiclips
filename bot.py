@@ -6,10 +6,10 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
-    print(f"[JimiClips LiteEngine] {msg}", flush=True)
+    print(f"[JimiClips Cliffhanger] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
-    log("Extracting lightweight audio stream...")
+    log("Extracting audio stream...")
     cmd = [
         "ffmpeg", "-y",
         "-i", video_file,
@@ -22,25 +22,24 @@ def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     return audio_file
 
-def find_viral_window(audio_file, target_duration=45):
+def find_cliffhanger_window(audio_file, target_duration=35, min_dur=25, max_dur=45):
     """
-    Rapidly scans the audio waveform in memory to find the highest-energy punchline window
-    WITHOUT running heavy neural speech models on the whole file.
+    Finds a narrative arc that opens on an engaging hook, builds tension,
+    and cuts at the peak spike (cliffhanger) rather than a dead-air conclusion.
     """
-    log("Scanning audio waveform for highest energy/reaction beat...")
+    log("Scanning audio for tension-build and cliffhanger hook...")
     sample_rate = 16000
-    
+
     with open(audio_file, "rb") as f:
-        f.seek(44)  # Skip standard WAV header
+        f.seek(44)
         raw_data = f.read()
 
     audio_data = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
     total_sec = len(audio_data) / sample_rate
 
-    if total_sec <= target_duration:
+    if total_sec <= max_dur:
         return 0.0, total_sec
 
-    # Group into 1-second energy buckets
     step = sample_rate
     num_buckets = int(len(audio_data) / step)
     reshaped = audio_data[:num_buckets * step].reshape((num_buckets, step))
@@ -48,30 +47,28 @@ def find_viral_window(audio_file, target_duration=45):
 
     window_len = int(target_duration)
     best_start = 0
-    max_score = -1.0
+    max_escalation_score = -1.0
 
-    # Step through timeline every 2 seconds
+    # Scan for windows where the ending 5 seconds have a noticeable volume/excitement surge
     for s in range(0, len(rms_profile) - window_len, 2):
         chunk = rms_profile[s : s + window_len]
-        total_energy = float(np.sum(chunk))
-        peak = float(np.max(chunk))
-        avg = float(np.mean(chunk)) + 1e-5
+        early_energy = float(np.mean(chunk[:int(window_len * 0.4)]))
+        climax_energy = float(np.mean(chunk[-int(window_len * 0.3):]))
         
-        # Reward high sustained energy + spike
-        score = total_energy * (1.0 + min(peak / avg, 2.0))
-        if score > max_score:
-            max_score = score
+        # Escalation factor: clips that ramp up in energy toward the cut
+        escalation = (climax_energy + 1e-4) / (early_energy + 1e-4)
+        total_energy = float(np.sum(chunk))
+        score = total_energy * min(escalation, 2.5)
+
+        if score > max_escalation_score:
+            max_escalation_score = score
             best_start = s
 
-    log(f"Locked peak action beat: {best_start}s to {best_start + target_duration}s")
+    log(f"Locked cliffhanger segment: {best_start}s to {best_start + target_duration}s")
     return float(best_start), float(target_duration)
 
 def transcribe_window_only(audio_file, clip_start, clip_duration):
-    """
-    Transcribes strictly the 30-50s clip window using base.en.
-    Saves massive amounts of CPU and prevents throttling.
-    """
-    log("Transcribing targeted clip window (base.en, int8)...")
+    log("Transcribing targeted cliffhanger window (base.en, int8)...")
     sample_rate = 16000
     start_byte = 44 + int(clip_start * sample_rate * 2)
     len_bytes = int(clip_duration * sample_rate * 2)
@@ -100,14 +97,9 @@ def transcribe_window_only(audio_file, clip_start, clip_duration):
                 "text": txt
             })
 
-    log(f"Targeted transcription complete: {len(segments)} dialogue lines.")
     return segments
 
 def generate_safe_subtitles(segments, clip_duration, ass_path="subtitles.ass"):
-    """
-    Generates dynamic captions positioned in the upper safe-zone
-    to avoid colliding with bottom graphics or TikTok UI.
-    """
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -117,6 +109,7 @@ PlayResY: 1920
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Impact,76,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,6,3,2,80,80,920,1
 Style: Highlight,Impact,82,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,106,106,1,0,1,7,4,2,80,80,920,1
+Style: OutroCTA,Impact,72,&H0000FFFF,&H000000FF,&H00000000,&HB0000000,-1,0,0,0,100,100,1,0,1,6,4,2,60,60,780,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -129,9 +122,12 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         secs = t % 60
         return f"{hrs:01d}:{mins:02d}:{secs:05.2f}"
 
+    # Leave the final 1.5 seconds reserved for the curiosity CTA card
+    dialogue_cutoff = max(0.0, clip_duration - 1.5)
+
     for seg in segments:
         s_start = max(0.0, seg["start"])
-        s_end = min(clip_duration, seg["end"])
+        s_end = min(dialogue_cutoff, seg["end"])
 
         if s_end - s_start < 0.2:
             continue
@@ -159,20 +155,32 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             events.append(f"Dialogue: 0,{format_time(sub_start)},{format_time(sub_end)},Default,,0,0,0,,{' '.join(formatted)}")
 
+    # Add curiosity CTA prompt during the final 1.8 seconds
+    cta_start = max(0.0, clip_duration - 1.8)
+    events.append(f"Dialogue: 1,{format_time(cta_start)},{format_time(clip_duration)},OutroCTA,,0,0,0,,WATCH FULL VIDEO FOR WHAT HAPPENED NEXT...")
+
     with open(ass_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(events) + "\n")
 
     return ass_path
 
-def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
-    log(f"Rendering 1080x1920 cut using low-overhead filter ({clip_duration:.1f}s)...")
+def render_cliffhanger_clip(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
+    log(f"Rendering {clip_duration:.1f}s cut with smooth audio decrescendo & visual fade...")
 
-    # Unified 9:16 Crop with bicubic scaling (no dual-screen slice, minimal CPU strain)
+    # Soft transition settings
+    fade_len = 0.6
+    fade_start = max(0.0, clip_duration - fade_len)
+
+    # 1. Unified 9:16 center crop (no split screen)
+    # 2. Subtitles with outro prompt
+    # 3. Smooth fade-out at the end to prevent abrupt jarring cutoff
     filter_complex = (
         f"[0:v]crop=ih*(9/16):ih,scale=1080:1920:flags=bicubic,"
         f"eq=saturation=1.08:contrast=1.03,"
-        f"ass={ass_file}[vout];"
-        f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
+        f"ass={ass_file},"
+        f"fade=t=out:st={fade_start}:d={fade_len}[vout];"
+        f"[0:a]volume=1.2,alimiter=limit=0.92,"
+        f"afade=t=out:st={fade_start}:d={fade_len}[aout]"
     )
 
     cmd = [
@@ -186,8 +194,8 @@ def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, outpu
         "-c:v", "libx264",
         "-profile:v", "high",
         "-crf", "19",
-        "-preset", "ultrafast",   # Prevents CPU choking on throttled tier
-        "-threads", "1",          # Keeps CPU within safe single-core quota
+        "-preset", "ultrafast",
+        "-threads", "1",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "160k",
@@ -196,11 +204,11 @@ def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, outpu
     ]
 
     subprocess.run(cmd, check=True)
-    log(f"Render complete -> {output_clip}")
+    log(f"Export completed cleanly -> {output_clip}")
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
-    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 45
+    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 35
 
     audio_path = "extracted.wav"
     ass_path = "subtitles.ass"
@@ -213,22 +221,11 @@ def main():
             except Exception:
                 pass
 
-    # 1. Fast audio dump
     extract_audio(input_file, audio_path)
-
-    # 2. Instant energy scan without Whisper
-    clip_start, clip_duration = find_viral_window(audio_path, target_duration=target_dur)
-
-    # 3. Whisper transcribes ONLY the selected 45s moment
+    clip_start, clip_duration = find_cliffhanger_window(audio_path, target_duration=target_dur)
     segments = transcribe_window_only(audio_path, clip_start, clip_duration)
-
-    # 4. Generate kinetic subtitles in safe zone
     generate_safe_subtitles(segments, clip_duration, ass_path)
-
-    # 5. Fast, single-thread 1080x1920 render
-    render_vertical_clip(input_file, clip_start, clip_duration, ass_path, output_clip)
-
-    log("Pipeline complete.")
+    render_cliffhanger_clip(input_file, clip_start, clip_duration, ass_path, output_clip)
 
 if __name__ == "__main__":
     main()
