@@ -6,7 +6,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
-    print(f"[JimiClips 4K] {msg}", flush=True)
+    print(f"[JimiClips Engine] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     log("Extracting high-precision 16kHz PCM audio stream...")
@@ -23,44 +23,54 @@ def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     return audio_file
 
 def transcribe_audio_segments(audio_file):
-    log("Scanning speech & semantic structure via Faster-Whisper...")
-    model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
-    
+    # Using 'base.en' instead of 'tiny.en' drastically reduces word mishearings and hallucinations
+    log("Transcribing dialogue via Faster-Whisper (base.en)...")
+    model = WhisperModel("base.en", device="cpu", compute_type="int8")
+
     with open(audio_file, "rb") as f:
         f.seek(44)
         raw_data = f.read()
     audio_np = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
-    
-    segments_gen, _ = model.transcribe(audio_np, beam_size=3)
-    
+
+    segments_gen, _ = model.transcribe(
+        audio_np,
+        beam_size=5,
+        word_timestamps=True,
+        condition_on_previous_text=False,
+        vad_filter=True  # Strips ambient mic noise and phantom murmurs
+    )
+
     segments = []
     for s in segments_gen:
-        segments.append({
-            "start": float(s.start),
-            "end": float(s.end),
-            "text": s.text.strip()
-        })
-    log(f"Transcription complete: {len(segments)} narrative segments detected.")
+        txt = s.text.strip()
+        if txt:
+            segments.append({
+                "start": float(s.start),
+                "end": float(s.end),
+                "text": txt,
+                "words": getattr(s, "words", [])
+            })
+
+    log(f"Speech transcription complete: {len(segments)} segments mapped.")
     return segments, audio_np
 
 def find_narrative_climax(segments, audio_np, target_duration=45, min_dur=30, max_dur=55):
     """
-    Finds a complete story beat:
-    - Starts on a strong sentence start (hook)
-    - Captures high emotional energy & dialogue density
-    - Ends naturally at a terminal punctuation mark (. ! ?) so punchline is never cut off
+    Selects a complete narrative arc:
+    - Starts at a sentence hook (0-2s)
+    - Captures the primary dialogue/action peak
+    - Locks the ending to a terminal punctuation mark (. ! ?) so punchlines are never severed mid-word.
     """
-    log("Analyzing dialogue beats to lock complete setup -> punchline narrative...")
+    log("Scanning dialogue beats to lock complete setup-to-punchline climax...")
     sample_rate = 16000
     total_seconds = len(audio_np) / sample_rate
 
     if total_seconds <= max_dur:
-        log("Video is naturally short-form; preserving entire narrative arc.")
+        log("Media length is under max duration; keeping entire video.")
         return 0.0, total_seconds
 
     if not segments:
-        # Fallback if no speech is detected: find peak audio energy window
-        log("No speech segments detected; using energy envelope.")
+        log("No speech segments detected; utilizing audio energy envelope fallback.")
         step = sample_rate
         num_windows = int(len(audio_np) / step)
         trimmed = audio_np[:num_windows * step].reshape((num_windows, step))
@@ -78,65 +88,62 @@ def find_narrative_climax(segments, audio_np, target_duration=45, min_dur=30, ma
     best_start = segments[0]["start"]
     best_end = min(total_seconds, best_start + target_duration)
     highest_score = -1.0
+    terminal_punct = re.compile(r'[.!?]$')
 
-    terminal_pattern = re.compile(r'[.!?]$')
+    for i, s_seg in enumerate(segments):
+        start_time = max(0.0, s_seg["start"] - 0.2)
 
-    for i, start_seg in enumerate(segments):
-        start_time = max(0.0, start_seg["start"] - 0.2)
-        
-        # Look ahead for a candidate end segment that falls within the duration window
         for j in range(i, len(segments)):
-            end_seg = segments[j]
-            duration = end_seg["end"] - start_time
-            
+            e_seg = segments[j]
+            duration = e_seg["end"] - start_time
+
             if duration < min_dur:
                 continue
             if duration > max_dur:
                 break
-            
-            # Bonus score for ending on terminal punctuation (natural punchline payoff)
-            has_clean_finish = bool(terminal_pattern.search(end_seg["text"]))
-            
-            # Compute energy over this candidate window
+
+            # Prioritize clean completion on sentence punctuation
+            has_clean_terminal = bool(terminal_punct.search(e_seg["text"]))
+
             s_idx = int(start_time * sample_rate)
-            e_idx = int(end_seg["end"] * sample_rate)
+            e_idx = int(e_seg["end"] * sample_rate)
             chunk = audio_np[s_idx:e_idx]
             energy = np.sqrt(np.mean(chunk ** 2)) if len(chunk) > 0 else 0.0
-            
-            # Word density: words per second
+
             word_count = sum(len(s["text"].split()) for s in segments[i:j+1])
             speech_density = word_count / duration
-            
+
             score = (energy * 100.0) + (speech_density * 1.5)
-            if has_clean_finish:
-                score *= 1.4  # strong preference for a finished thought
-                
+            if has_clean_terminal:
+                score *= 1.45  # Enforces complete thought closure
+
             if score > highest_score:
                 highest_score = score
                 best_start = start_time
-                best_end = end_seg["end"] + 0.4  # slight breathing room for reaction payoff
+                best_end = e_seg["end"] + 0.4  # Trailing breathing room for final syllable
 
-    # Ensure bounds
     best_end = min(total_seconds, best_end)
     final_dur = best_end - best_start
-    log(f"Locked punchline window: {best_start:.2f}s to {best_end:.2f}s (Duration: {final_dur:.2f}s)")
+    log(f"Locked complete beat: {best_start:.2f}s to {best_end:.2f}s (Duration: {final_dur:.2f}s)")
     return best_start, final_dur
 
 def generate_ass_subtitles(segments, clip_start, clip_duration, ass_path="subtitles.ass"):
     """
-    Builds mobile safe-zone kinetic subtitles scaled for a 4K vertical canvas (2160x3840).
+    Builds mobile safe-zone kinetic subtitles.
+    MarginV is set to 920 to keep text cleanly in the upper-middle frame,
+    preventing any collision with existing lower-third burned-in titles.
     """
-    log("Building 4K kinetic subtitles with pop accents (.ass)...")
-    
+    log("Building kinetic subtitles positioned in upper safe zone...")
+
     header = """[Script Info]
 ScriptType: v4.00+
-PlayResX: 2160
-PlayResY: 3840
+PlayResX: 1080
+PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Impact,160,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,2,0,1,12,6,2,120,120,840,1
-Style: Highlight,Impact,172,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,108,108,2,0,1,14,8,2,120,120,840,1
+Style: Default,Impact,76,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,6,3,2,80,80,920,1
+Style: Highlight,Impact,82,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,106,106,1,0,1,7,4,2,80,80,920,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -153,10 +160,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     for seg in segments:
         if seg["end"] < clip_start or seg["start"] > clip_end:
             continue
-        
+
         start_rel = max(0.0, seg["start"] - clip_start)
         end_rel = min(clip_duration, seg["end"] - clip_start)
-        
+
         if end_rel - start_rel < 0.2:
             continue
 
@@ -165,24 +172,23 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             continue
 
         chunk_size = 3
-        duration_per_word = (end_rel - start_rel) / len(words)
+        dur_per_word = (end_rel - start_rel) / len(words)
 
         for i in range(0, len(words), chunk_size):
             chunk = words[i:i + chunk_size]
-            sub_start = start_rel + (i * duration_per_word)
-            sub_end = min(end_rel, sub_start + (len(chunk) * duration_per_word))
-            
+            sub_start = start_rel + (i * dur_per_word)
+            sub_end = min(end_rel, sub_start + (len(chunk) * dur_per_word))
+
             highlight_word = max(chunk, key=len)
-            formatted_words = []
+            formatted = []
             for w in chunk:
-                # Strip non-alphanumeric characters for clean comparison
                 clean_w = re.sub(r'\W+', '', w)
                 if clean_w.lower() == re.sub(r'\W+', '', highlight_word).lower() and len(clean_w) > 3:
-                    formatted_words.append(f"{{\\rHighlight}}{w.upper()}{{\\rDefault}}")
+                    formatted.append(f"{{\\rHighlight}}{w.upper()}{{\\rDefault}}")
                 else:
-                    formatted_words.append(w.upper())
-            
-            line_text = " ".join(formatted_words)
+                    formatted.append(w.upper())
+
+            line_text = " ".join(formatted)
             events.append(f"Dialogue: 0,{format_time(sub_start)},{format_time(sub_end)},Default,,0,0,0,,{line_text}")
 
     with open(ass_path, "w", encoding="utf-8") as f:
@@ -190,44 +196,31 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     return ass_path
 
-def render_master_4k_vertical(input_video, clip_start, clip_duration, ass_file, framing_mode="smart_center", output_clip="final_clip.mp4"):
-    log(f"Rendering 4K Vertical UHD (2160x3840) [{framing_mode}]...")
+def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, framing_mode="smart_center", output_clip="final_clip.mp4"):
+    log(f"Rendering unified 1080x1920 vertical master ({clip_duration:.1f}s, Mode: {framing_mode})...")
 
-    # Filtergraph options:
-    # 1. smart_center: Focuses on the primary character/action without slicing them in half.
-    #    Uses a blurred ambient background fill so widescreen media fills 9:16 portrait naturally without distortion.
-    # 2. tight_crop: Direct 9:16 center zoom for videos where the character stays dead center.
-    # 3. stacked: Only used when explicitly selected for streamer webcam + screen setups.
-    
+    # Unified Framing Pipeline:
+    # - 'smart_center': Keeps original subject centered with an ambient blurred fill behind it.
+    #   Guarantees no horizontal chopping, stretching, or severed characters.
+    # - 'tight_crop': Standard direct 9:16 center crop.
     if framing_mode == "smart_center":
         filter_complex = (
             f"[0:v]split=2[bg_raw][fg_raw];"
-            f"[bg_raw]scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,boxblur=25:5,eq=brightness=-0.18[bg];"
-            f"[fg_raw]scale=2160:-1:flags=bicubic[fg];"
+            f"[bg_raw]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.15[bg];"
+            f"[fg_raw]scale=1080:-1:flags=bicubic[fg];"
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2,"
-            f"eq=saturation=1.12:contrast=1.05,"
-            f"unsharp=5:5:0.7:5:5:0.0,"
+            f"eq=saturation=1.10:contrast=1.04,"
+            f"unsharp=5:5:0.6:5:5:0.0,"
             f"ass={ass_file}[vout];"
-            f"[0:a]volume=1.25,alimiter=limit=0.92[aout]"
+            f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
         )
-    elif framing_mode == "tight_crop":
+    else:  # tight_crop
         filter_complex = (
-            f"[0:v]crop=ih*(9/16):ih,scale=2160:3840:flags=bicubic,"
-            f"eq=saturation=1.12:contrast=1.05,"
-            f"unsharp=5:5:0.7:5:5:0.0,"
+            f"[0:v]crop=ih*(9/16):ih,scale=1080:1920:flags=bicubic,"
+            f"eq=saturation=1.10:contrast=1.04,"
+            f"unsharp=5:5:0.6:5:5:0.0,"
             f"ass={ass_file}[vout];"
-            f"[0:a]volume=1.25,alimiter=limit=0.92[aout]"
-        )
-    else:  # stacked
-        filter_complex = (
-            f"[0:v]split=2[cam_raw][game_raw];"
-            f"[cam_raw]crop=in_w*0.4:in_h*0.45:0:0,scale=2160:1344:flags=bicubic[cam];"
-            f"[game_raw]crop=in_h*(9/16)*0.85:in_h*0.65:in_w/2-(in_h*(9/16)*0.85)/2:in_h*0.35,scale=2160:2496:flags=bicubic[game];"
-            f"[cam][game]vstack=inputs=2,"
-            f"eq=saturation=1.12:contrast=1.05,"
-            f"unsharp=5:5:0.7:5:5:0.0,"
-            f"ass={ass_file}[vout];"
-            f"[0:a]volume=1.25,alimiter=limit=0.92[aout]"
+            f"[0:a]volume=1.2,alimiter=limit=0.92[aout]"
         )
 
     cmd = [
@@ -240,19 +233,19 @@ def render_master_4k_vertical(input_video, clip_start, clip_duration, ass_file, 
         "-map", "[aout]",
         "-c:v", "libx264",
         "-profile:v", "high",
-        "-level:v", "5.1",
-        "-crf", "17",             # Visually lossless 4K mastering
-        "-preset", "veryfast",    # Balances quality and cloud CPU constraints
+        "-level:v", "4.2",
+        "-crf", "18",
+        "-preset", "veryfast",
         "-threads", "2",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "320k",
-        "-ar", "48000",
+        "-b:a", "192k",
+        "-ar", "44100",
         output_clip
     ]
 
     subprocess.run(cmd, check=True)
-    log(f"4K Master render complete -> {output_clip}")
+    log(f"Master render successfully completed -> {output_clip}")
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
@@ -263,20 +256,29 @@ def main():
     ass_path = "subtitles.ass"
     output_clip = "final_clip.mp4"
 
+    for f_tmp in [audio_path, ass_path, output_clip]:
+        if os.path.exists(f_tmp):
+            try:
+                os.remove(f_tmp)
+            except Exception:
+                pass
+
     # 1. Audio stream extraction
     extract_audio(input_file, audio_path)
 
-    # 2. Transcription with timestamp mapping
+    # 2. Base.en Whisper transcription with VAD noise-filtering
     segments, audio_np = transcribe_audio_segments(audio_path)
 
-    # 3. Semantic dialogue scan for full beat (starts at hook, ends at punchline)
+    # 3. Punctuation-locked narrative window selection
     clip_start, clip_duration = find_narrative_climax(segments, audio_np, target_duration=target_dur)
 
-    # 4. Generate 4K kinetic word-burst subtitles with highlights
+    # 4. Generate subtitles in upper safe-zone
     generate_ass_subtitles(segments, clip_start, clip_duration, ass_path)
 
-    # 5. Render 4K (2160x3840) Vertical Master
-    render_master_4k_vertical(input_file, clip_start, clip_duration, ass_path, framing_mode, output_clip)
+    # 5. Composite unified 1080x1920 vertical master
+    render_vertical_clip(input_file, clip_start, clip_duration, ass_path, framing_mode, output_clip)
+
+    log("Execution complete.")
 
 if __name__ == "__main__":
     main()
