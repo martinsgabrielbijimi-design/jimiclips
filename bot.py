@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
@@ -25,7 +26,17 @@ def transcribe_audio(audio_file="extracted.wav"):
     model = WhisperModel("tiny.en", device="cpu", compute_type="int8")
     
     log("Scanning speech timestamps across video...")
-    segments, _ = model.transcribe(audio_file, beam_size=5)
+    
+    # Read the raw 16kHz PCM audio with numpy to bypass PyAV/metadata_errors bug
+    try:
+        with open(audio_file, "rb") as f:
+            f.seek(44)  # Skip 44-byte WAV header
+            raw_data = f.read()
+        audio_np = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
+        segments, _ = model.transcribe(audio_np, beam_size=5)
+    except Exception as e:
+        log(f"Falling back to direct file reader ({e})...")
+        segments, _ = model.transcribe(audio_file, beam_size=5)
     
     transcript = []
     for s in segments:
@@ -34,8 +45,8 @@ def transcribe_audio(audio_file="extracted.wav"):
     log(f"Speech analysis complete: {len(transcript)} dialogue fragments mapped.")
     return transcript
 
-def process_vertical_clip(input_video="uploaded_source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=30, crf="17"):
-    log(f"Starting master render: 1080x1920 9:16 (CRF {crf}, Lanczos filter, 320k Audio)...")
+def process_vertical_clip(input_video="uploaded_source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=130, crf="17"):
+    log(f"Starting master render: 1080x1920 9:16 ({duration_sec}s duration, CRF {crf}, Lanczos filter, 320k Audio)...")
     
     # 9:16 Center crop + Lanczos scaling + SAR 1:1
     vf_filter = (
@@ -68,13 +79,12 @@ def main():
     # Arguments: <input_path> <start_sec> <duration_sec> <crf>
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
     start_sec = int(sys.argv[2]) if len(sys.argv) > 2 else 0
-    duration_sec = int(sys.argv[3]) if len(sys.argv) > 3 else 30
+    duration_sec = int(sys.argv[3]) if len(sys.argv) > 3 else 130
     crf = sys.argv[4] if len(sys.argv) > 4 else "17"
 
     output_clip = "final_clip.mp4"
     audio_path = "extracted.wav"
 
-    # Clean old export files
     for old in [audio_path, output_clip]:
         if os.path.exists(old):
             try:
