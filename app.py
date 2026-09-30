@@ -11,21 +11,36 @@ st.set_page_config(
 )
 
 st.title("🎬 JimiClips AI Video Studio")
-st.markdown("Transform long-form videos into high-quality vertical shorts (CRF 18, Lanczos scaling).")
+st.markdown("Transform long-form content into high-definition vertical shorts (1080p, Lanczos, CRF 18).")
 
-# Input field
-video_url = st.text_input("Enter YouTube or Direct Video URL:", placeholder="https://www.youtube.com/watch?v=...")
+tab_url, tab_upload = st.tabs(["🔗 Paste YouTube URL", "📁 Upload Local Video File"])
+
+target_input = None
+
+with tab_url:
+    url_val = st.text_input("YouTube or Direct Video URL:", placeholder="https://www.youtube.com/watch?v=...")
+    if url_val.strip():
+        target_input = url_val.strip()
+
+with tab_upload:
+    uploaded_file = st.file_uploader("Upload an MP4 or MOV directly:", type=["mp4", "mov", "mkv"])
+    if uploaded_file is not None:
+        save_path = "uploaded_source.mp4"
+        with open(save_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        target_input = save_path
+        st.success("File uploaded and ready for processing.")
 
 if st.button("Generate Clip", type="primary"):
-    if not video_url.strip():
-        st.warning("Please enter a valid URL first.")
+    if not target_input:
+        st.warning("Please provide a URL or upload a video file first.")
     else:
         status_box = st.empty()
         log_box = st.empty()
-        status_box.info("Starting JimiClips pipeline...")
+        status_box.info("Running JimiClips pipeline...")
 
-        # Run bot.py using the exact virtualenv Python executable
-        cmd = [sys.executable, "bot.py", video_url.strip()]
+        # Explicitly run using Streamlit's internal python virtual environment
+        cmd = [sys.executable, "bot.py", target_input]
         
         process = subprocess.Popen(
             cmd,
@@ -38,7 +53,6 @@ if st.button("Generate Clip", type="primary"):
         full_logs = ""
         output_clip_path = "final_clip.mp4"
 
-        # Stream output in real time
         for line in iter(process.stdout.readline, ''):
             full_logs += line
             log_box.code(full_logs[-1500:], language="bash")
@@ -58,4 +72,4 @@ if st.button("Generate Clip", type="primary"):
                     mime="video/mp4"
                 )
         else:
-            status_box.error("Processing failed. Review the terminal logs above.")
+            status_box.error("Processing failed. Check the logs above.")
