@@ -5,7 +5,7 @@ import shutil
 import streamlit as st
 
 st.set_page_config(
-    page_title="JimiClips Studio",
+    page_title="JimiClips Studio - Viral Funnel",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -48,58 +48,58 @@ st.markdown("""
 
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/video-editing.png", width=64)
-    st.markdown("### 🎛️ Director Settings")
+    st.markdown("### 🎛️ Viral Retention Settings")
 
     target_duration = st.slider(
-        "Clip Duration (seconds)",
-        min_value=30,
-        max_value=55,
-        value=42,
-        help="Target length for high-retention clips."
+        "Target Duration (seconds)",
+        min_value=25,
+        max_value=45,
+        value=35,
+        help="Optimal range for building tension that leaves viewers wanting the full story."
     )
 
     st.markdown("---")
-    st.markdown("### ⚡ Low-CPU Engine")
-    st.caption("✅ **Windowed Whisper:** Only transcribes the exact punchline beat.")
-    st.caption("✅ **Single-Core Throttling Shield:** Runs at 1 thread to avoid platform caps.")
-    st.caption("✅ **Unified 9:16 Canvas:** Zero split-screen character chopping.")
-    st.caption("✅ **Upper Safe-Zone Text:** No collision with bottom captions.")
+    st.markdown("### 🎯 Retention Architecture")
+    st.caption("✅ **Story Escalation:** Automatically builds tension toward the cut point.")
+    st.caption("✅ **Decrescendo Ending:** Smooth audio/video fade instead of abrupt mid-word stops.")
+    st.caption("✅ **Curiosity CTA:** Adds an outro prompt encouraging viewers to check the full video.")
+    st.caption("✅ **Single 9:16 Canvas:** Full portrait view without character-slicing splits.")
 
-st.markdown('<div class="main-header">⚡ JimiClips Studio</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-text">High-retention vertical short generator with low-CPU footprint.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">⚡ JimiClips Viral Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-text">Generate hook-driven short-form teasers that drive viewers back to the full video.</div>', unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown('<div class="feature-badge"><div class="badge-title">AI HOOK FINDER</div><div class="badge-desc">Energy envelope scan</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">CURIOUS HOOK</div><div class="badge-desc">Builds stakes from second 1</div></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="feature-badge"><div class="badge-title">UNIFIED 9:16</div><div class="badge-desc">No severed characters</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">CLIFFHANGER CUT</div><div class="badge-desc">Ends right at the climax peak</div></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown('<div class="feature-badge"><div class="badge-title">SAFE-ZONE TEXT</div><div class="badge-desc">Clean subtitle placement</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">SMOOTH OUTRO</div><div class="badge-desc">Fade-out + curiosity prompt</div></div>', unsafe_allow_html=True)
 
 st.write("")
 
 uploaded_file = st.file_uploader(
-    "Upload stream or video file (MP4, MOV, MKV):",
+    "Upload raw footage or VOD (MP4, MOV, MKV):",
     type=["mp4", "mov", "mkv"],
-    help="Upload your video file for processing."
+    help="Upload your video file for cliffhanger extraction."
 )
 
 if uploaded_file is not None:
     size_mb = uploaded_file.size / (1024 * 1024)
     st.success(f"📁 **VOD Ready:** `{uploaded_file.name}` ({size_mb:.1f} MB)")
 
-    if st.button("🔥 Auto-Cut Viral Clip", type="primary", use_container_width=True):
+    if st.button("🔥 Generate Viral Teaser Short", type="primary", use_container_width=True):
         save_path = "uploaded_source.mp4"
         output_clip_path = "final_clip.mp4"
 
-        with st.status("🎬 Rendering clip under CPU limits...", expanded=True) as status:
-            st.write("📥 Buffering video to storage...")
+        with st.status("🎬 Directing teaser arc...", expanded=True) as status:
+            st.write("📥 Saving video to buffer...")
 
             uploaded_file.seek(0)
             with open(save_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file, f, length=4 * 1024 * 1024)
 
-            status.update(label="🧠 Locating climax beat & generating vertical cut...", state="running")
+            status.update(label="🧠 Pinpointing tension arc, outro fade & subtitles...", state="running")
 
             log_box = st.empty()
 
@@ -126,13 +126,13 @@ if uploaded_file is not None:
             process.wait()
 
             if process.returncode == 0 and os.path.exists(output_clip_path):
-                status.update(label="✅ Clip created successfully!", state="complete")
+                status.update(label="✅ Viral teaser generated!", state="complete")
             else:
-                status.update(label="❌ Render encountered an error.", state="error")
+                status.update(label="❌ Render encountered an issue.", state="error")
 
         if os.path.exists(output_clip_path):
             st.markdown("---")
-            st.markdown("### 🏆 Your Vertical Short is Ready")
+            st.markdown("### 🏆 Your Funnel Teaser Short is Ready")
             v_col, dl_col = st.columns([1.1, 1])
 
             with v_col:
@@ -141,17 +141,17 @@ if uploaded_file is not None:
             with dl_col:
                 st.markdown("""
                 **Applied Master Optimizations:**
-                - 🎯 **Viral Moment:** Automatically captured high-action climax.
-                - 📐 **Format:** 1080x1920 (9:16) portrait.
-                - 💬 **Dynamic Subtitles:** Kinetic highlights in upper safe zone.
-                - ⚡ **Optimized Render:** Zero CPU throttling penalty.
+                - 🎯 **Curiosity Loop:** Setup and escalation included, with the final resolution held back.
+                - 📐 **Unified Canvas:** Natural 1080x1920 portrait without duplicate split screens.
+                - 💬 **Safe-Zone Text:** Positioned above bottom UI and original overlays.
+                - 🎬 **Polished Fade Out:** Gentle decrescendo and closing prompt rather than an abrupt audio drop.
                 """)
 
                 with open(output_clip_path, "rb") as f:
                     st.download_button(
-                        label="⬇️️ Download 1080p Clip",
+                        label="⬇️ Download Teaser Clip",
                         data=f,
-                        file_name="viral_clip_1080p.mp4",
+                        file_name="viral_teaser_clip.mp4",
                         mime="video/mp4",
                         type="primary",
                         use_container_width=True
