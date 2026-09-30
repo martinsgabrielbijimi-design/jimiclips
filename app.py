@@ -45,7 +45,6 @@ if st.button("Generate Clip", type="primary"):
         log_box = st.empty()
         status_box.info("Running JimiClips pipeline...")
 
-        # Explicitly run using Streamlit's virtualenv Python executable
         cmd = [sys.executable, "bot.py", target_input]
         
         process = subprocess.Popen(
