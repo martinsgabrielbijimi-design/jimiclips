@@ -23,7 +23,7 @@ with tab_url:
         target_input = url_val.strip()
 
 with tab_upload:
-    uploaded_file = st.file_uploader("Upload an MP4 or MOV directly:", type=["mp4", "mov", "mkv"])
+    uploaded_file = st.file_uploader("Upload an MP4, MOV, or MKV directly:", type=["mp4", "mov", "mkv"])
     if uploaded_file is not None:
         save_path = "uploaded_source.mp4"
         with open(save_path, "wb") as f:
@@ -72,4 +72,4 @@ if st.button("Generate Clip", type="primary"):
                     mime="video/mp4"
                 )
         else:
-            status_box.error("Processing failed. Check the logs above.")
+            status_box.error("Processing failed. Review the terminal logs above.")
