@@ -7,15 +7,26 @@ import yt_dlp
 def log(msg):
     print(f"[JimiClips] {msg}", flush=True)
 
-def download_video(url, output_filename="source.mp4"):
-    log("Fetching video stream via resilient player client...")
-    
-    # Locate cookies.txt in the same directory as this script
+def find_cookie_file():
+    """Look for cookies.txt in multiple common working paths."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    cookie_path = os.path.join(base_dir, "cookies.txt")
+    candidates = [
+        os.path.join(base_dir, "cookies.txt"),
+        os.path.join(os.getcwd(), "cookies.txt"),
+        "cookies.txt"
+    ]
+    for path in candidates:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            return path
+    return None
+
+def download_video(url, output_filename="source.mp4"):
+    log("Initializing download pipeline...")
+    
+    cookie_file = find_cookie_file()
     
     ydl_opts = {
-        # Select best video stream up to 1080p, with robust fallback
+        # Select best available pre-merged stream or separate streams up to 1080p
         'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
@@ -23,30 +34,36 @@ def download_video(url, output_filename="source.mp4"):
         'quiet': False,
         'no_warnings': True,
         'geo_bypass': True,
-        # iOS client avoids the missing player response issue on cloud environments
+        # Allow yt-dlp to manage matching client headers natively (avoids CDN 403)
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android'],
+                'player_client': ['android_creator', 'android', 'web'],
             }
         },
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-            'Accept-Language': 'en-US,en;q=0.9',
-        }
+        # Mitigate cloud IP throttling
+        'socket_timeout': 30,
+        'retries': 5,
+        'fragment_retries': 5,
     }
     
-    # Attach cookies if found
-    if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
-        log(f"Found cookies file at: {cookie_path}")
-        ydl_opts['cookiefile'] = cookie_path
+    if cookie_file:
+        log(f"Authenticated session loaded from: {cookie_file}")
+        ydl_opts['cookiefile'] = cookie_file
     else:
-        log("No valid cookies.txt detected. Attempting unauthenticated direct stream.")
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+        log("No cookies.txt detected. Running unauthenticated request.")
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except yt_dlp.utils.DownloadError as err:
+        log(f"Download failed: {err}")
+        raise RuntimeError(
+            "YouTube blocked the datacenter IP (HTTP 403). "
+            "To resolve: provide a fresh cookies.txt or upload the video directly via the Upload tab."
+        ) from err
         
     if not os.path.exists(output_filename) or os.path.getsize(output_filename) == 0:
-        raise RuntimeError("Downloaded file is empty. Check cookies or use the direct upload tab.")
+        raise RuntimeError("Output file is empty after download completed.")
         
     log("Source download complete.")
     return output_filename
@@ -81,7 +98,6 @@ def transcribe_audio(audio_file="extracted.wav"):
 def process_vertical_clip(input_video="source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=30):
     log("Rendering 1080x1920 vertical video (Lanczos scaling + CRF 18)...")
     
-    # 9:16 Center crop + Lanczos scaling + visually lossless CRF 18
     vf_filter = (
         "crop=ih*(9/16):ih,scale=1080:1920:flags=lanczos,"
         "setsar=1"
@@ -111,7 +127,7 @@ def main():
 
     target = sys.argv[1]
     
-    # Clean up artifacts from prior runs
+    # Clean previous run temporary files
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
