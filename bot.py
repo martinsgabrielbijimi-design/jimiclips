@@ -10,25 +10,20 @@ def log(msg):
 def download_video(url, output_filename="source.mp4"):
     log("Fetching video stream via authenticated client...")
     
-    # Locate cookies.txt using absolute directory path
+    # Locate cookies.txt in the same directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     cookie_path = os.path.join(base_dir, "cookies.txt")
     
     ydl_opts = {
-        # Grab best video up to 1080p (mp4 or webm) + best audio, then merge to mp4
-        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
+        # Resilient format selector: grab best video (<=1080p) + best audio, 
+        # or best combined stream, or whatever stream is available
+        'format': 'bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b',
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
         'overwrites': True,
         'quiet': False,
         'no_warnings': True,
         'geo_bypass': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['web', 'tv_embedded', 'android_creator'],
-                'player_skip': ['configs'],
-            }
-        }
     }
     
     if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
