@@ -8,10 +8,10 @@ def log(msg):
     print(f"[JimiClips] {msg}", flush=True)
 
 def download_video(url, output_filename="source.mp4"):
-    log("Fetching video stream via cloud bypass client...")
+    log("Fetching video stream via embedded/creator client bypass...")
     
     ydl_opts = {
-        # Format selection: target up to 1080p, fall back safely to best progressive stream
+        # Target up to 1080p, fall back safely to best progressive stream
         'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
@@ -19,14 +19,11 @@ def download_video(url, output_filename="source.mp4"):
         'quiet': False,
         'no_warnings': True,
         'geo_bypass': True,
-        # iOS client parameters prevent empty fragment delivery on cloud IPs
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
-            'Accept-Language': 'en-US,en;q=0.9',
-        },
+        # Bypasses 403 Forbidden by mimicking embedded player and Android creator clients
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android', 'web'],
+                'player_client': ['tv_embedded', 'android_creator', 'android'],
+                'player_skip': ['webpage', 'configs'],
             }
         }
     }
@@ -70,7 +67,7 @@ def transcribe_audio(audio_file="extracted.wav"):
 def process_vertical_clip(input_video="source.mp4", output_clip="final_clip.mp4", start_sec=0, duration_sec=30):
     log("Rendering 1080x1920 vertical video (Lanczos scaling + CRF 18)...")
     
-    # 9:16 Center-crop + clean Lanczos filter + CRF 18 visually lossless compression
+    # 9:16 Center crop + Lanczos scaling + visually lossless CRF 18
     vf_filter = (
         "crop=ih*(9/16):ih,scale=1080:1920:flags=lanczos,"
         "setsar=1"
@@ -100,7 +97,7 @@ def main():
 
     target = sys.argv[1]
     
-    # Clean up previous runs
+    # Clean up artifacts from previous runs
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
@@ -108,7 +105,6 @@ def main():
             except Exception:
                 pass
 
-    # Check if target is a web URL or an uploaded local file
     if target.startswith("http://") or target.startswith("https://"):
         video_path = download_video(target, "source.mp4")
     else:
