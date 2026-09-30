@@ -27,7 +27,7 @@ def transcribe_audio(audio_file="extracted.wav"):
     
     log("Scanning speech timestamps across video...")
     
-    # Read the raw 16kHz PCM audio with numpy to bypass PyAV/metadata_errors bug
+    # Read the raw 16kHz PCM audio directly with numpy (avoids PyAV metadata_errors bug completely)
     try:
         with open(audio_file, "rb") as f:
             f.seek(44)  # Skip 44-byte WAV header
@@ -35,7 +35,7 @@ def transcribe_audio(audio_file="extracted.wav"):
         audio_np = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
         segments, _ = model.transcribe(audio_np, beam_size=5)
     except Exception as e:
-        log(f"Falling back to direct file reader ({e})...")
+        log(f"Falling back to direct stream reading ({e})...")
         segments, _ = model.transcribe(audio_file, beam_size=5)
     
     transcript = []
