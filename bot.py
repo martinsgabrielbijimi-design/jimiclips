@@ -15,7 +15,8 @@ def download_video(url, output_filename="source.mp4"):
     cookie_path = os.path.join(base_dir, "cookies.txt")
     
     ydl_opts = {
-        'format': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]/best',
+        # Grab best video up to 1080p (mp4 or webm) + best audio, then merge to mp4
+        'format': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
         'overwrites': True,
@@ -25,6 +26,7 @@ def download_video(url, output_filename="source.mp4"):
         'extractor_args': {
             'youtube': {
                 'player_client': ['web', 'tv_embedded', 'android_creator'],
+                'player_skip': ['configs'],
             }
         }
     }
@@ -104,7 +106,7 @@ def main():
 
     target = sys.argv[1]
     
-    # Clear leftover media files from previous jobs
+    # Clean up leftover files from prior runs
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
