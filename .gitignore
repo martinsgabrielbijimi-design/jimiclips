@@ -1,7 +1,6 @@
-node_modules
-dist
-.DS_Store
-.env
-
-# Ignore the output video from Git but not videos you import into src/.
-out
+*.mp4
+*.wav
+*.json
+venv/
+__pycache__/
+renderer/node_modules/
