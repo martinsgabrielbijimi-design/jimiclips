@@ -8,35 +8,52 @@ def log(msg):
     print(f"[JimiClips] {msg}", flush=True)
 
 def download_video(url, output_filename="source.mp4"):
-    log("Fetching video stream via authenticated client...")
+    log("Fetching video stream via direct HTTPS stream (HLS disabled)...")
     
-    # Locate cookies.txt in the same directory
+    # Locate cookies.txt in the same directory as this script
     base_dir = os.path.dirname(os.path.abspath(__file__))
     cookie_path = os.path.join(base_dir, "cookies.txt")
     
     ydl_opts = {
-        # Resilient format selector: grab best video (<=1080p) + best audio, 
-        # or best combined stream, or whatever stream is available
-        'format': 'bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b',
+        # Strictly forbid HLS/m3u8 streams that return empty fragments on cloud IPs
+        'format': (
+            'bv*[protocol^=http][height<=1080]+ba[protocol^=http]/'
+            'b[protocol^=http][height<=1080]/'
+            'bv*[height<=1080]+ba/'
+            'b[height<=1080]/best'
+        ),
         'outtmpl': output_filename,
         'merge_output_format': 'mp4',
         'overwrites': True,
         'quiet': False,
         'no_warnings': True,
         'geo_bypass': True,
+        # Ban HLS manifests; use android and web direct streams
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'],
+                'player_skip': ['hls'],
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Encoding': 'gzip, deflate, br',
+        }
     }
     
+    # Attach cookies if found
     if os.path.exists(cookie_path) and os.path.getsize(cookie_path) > 0:
         log(f"Found cookies file at: {cookie_path}")
         ydl_opts['cookiefile'] = cookie_path
     else:
-        log("No valid cookies.txt detected. Attempting unauthenticated bypass.")
+        log("No valid cookies.txt detected. Attempting unauthenticated direct stream.")
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
         
     if not os.path.exists(output_filename) or os.path.getsize(output_filename) == 0:
-        raise RuntimeError("Downloaded file is empty. Verify that cookies.txt is valid or use direct upload.")
+        raise RuntimeError("Downloaded file is empty. Check cookies or use the direct upload tab.")
         
     log("Source download complete.")
     return output_filename
@@ -101,7 +118,7 @@ def main():
 
     target = sys.argv[1]
     
-    # Clean up leftover files from prior runs
+    # Clean up artifacts from prior executions
     for old_file in ["source.mp4", "extracted.wav", "final_clip.mp4"]:
         if os.path.exists(old_file) and target != old_file:
             try:
