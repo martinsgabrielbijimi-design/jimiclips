@@ -1,6 +1,7 @@
 import sys
 import os
 import subprocess
+import shutil
 import streamlit as st
 
 st.set_page_config(
@@ -71,7 +72,7 @@ with st.sidebar:
     st.caption("✅ **Mobile Saturation Boost:** +12% color depth.")
 
 st.markdown('<div class="main-header">🎬 JimiClips Elite Shorts Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-text">Transform raw hour-long streams into punchy, high-retention 1080x1920 60FPS vertical clips.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-text">Transform raw stream recordings into punchy, high-retention 1080x1920 60FPS vertical clips.</div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
@@ -87,9 +88,9 @@ st.write("")
 st.write("")
 
 uploaded_file = st.file_uploader(
-    "Upload raw stream recording or full VOD (MP4, MOV, MKV up to 1GB):",
+    "Upload raw stream recording or VOD (MP4, MOV, MKV up to 1GB):",
     type=["mp4", "mov", "mkv"],
-    help="Upload your full stream. The engine will scan the whole timeline to find the best viral beat."
+    help="Upload your video file. The engine will scan the timeline to find the best viral moment."
 )
 
 if uploaded_file is not None:
@@ -101,12 +102,14 @@ if uploaded_file is not None:
         output_clip_path = "final_clip.mp4"
 
         with st.status("🎬 Directing elite short-form cut...", expanded=True) as status:
-            st.write("📥 Buffering stream file to disk...")
+            st.write("📥 Streaming file to local storage...")
+            
+            # Reset seek pointer and write in 4MB chunks to prevent memory spikes
+            uploaded_file.seek(0)
             with open(save_path, "wb") as f:
-                while chunk := uploaded_file.read(8 * 1024 * 1024):
-                    f.write(chunk)
+                shutil.copyfileobj(uploaded_file, f, length=4 * 1024 * 1024)
 
-            status.update(label="🧠 Scanning entire timeline for climax, energy spikes & captions...", state="running")
+            status.update(label="🧠 Scanning timeline for energy peaks & captions...", state="running")
 
             log_box = st.empty()
 
