@@ -5,19 +5,18 @@ import shutil
 import streamlit as st
 
 st.set_page_config(
-    page_title="JimiClips 4K AI Studio",
+    page_title="JimiClips Studio",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling for modern dark aesthetic
 st.markdown("""
 <style>
     .main-header {
         font-size: 2.3rem;
         font-weight: 800;
-        background: linear-gradient(90deg, #10B981, #6366F1, #EC4899);
+        background: linear-gradient(90deg, #10B981, #6366F1);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         margin-bottom: 0.2rem;
@@ -58,72 +57,66 @@ with st.sidebar:
         min_value=30,
         max_value=55,
         value=45,
-        help="The engine targets complete setup-to-punchline narrative arcs within this window."
+        help="Locks to complete setup-to-punchline sentences within this window."
     )
 
     framing_mode_label = st.selectbox(
-        "Character & Framing Mode",
+        "Framing Composition",
         [
-            "Smart Portrait (Ambient Blur Fill - Never Slices Character)",
-            "Tight Center Zoom (Full 9:16 Crop)",
-            "Stacked Streamer (Webcam Top 35% / Screen 65%)"
+            "Smart Portrait (Ambient Fill - Never Slices Subject)",
+            "Direct Center Crop (Full 9:16 Frame)"
         ],
         index=0,
-        help="Smart Portrait guarantees characters/subjects are never chopped or cut in half."
+        help="Smart Portrait preserves full subject proportions with zero splitting or distortion."
     )
 
-    framing_map = {
-        "Smart Portrait (Ambient Blur Fill - Never Slices Character)": "smart_center",
-        "Tight Center Zoom (Full 9:16 Crop)": "tight_crop",
-        "Stacked Streamer (Webcam Top 35% / Screen 65%)": "stacked"
-    }
-    selected_framing = framing_map[framing_mode_label]
+    framing_mode = "smart_center" if "Smart" in framing_mode_label else "tight_crop"
 
     st.markdown("---")
-    st.markdown("### 💎 Visual & Audio Specs")
-    st.caption("✅ **Master Canvas:** 2160 × 3840 (4K Vertical UHD)")
-    st.caption("✅ **Narrative Engine:** Closes on sentence terminals (`. ! ?`)")
-    st.caption("✅ **Kinetic Captions:** 4K-scaled Impact with neon punch pop")
-    st.caption("✅ **Audio Profile:** 320 kbps studio stereo with peak limiter")
+    st.markdown("### ⚡ Error Prevention Engine")
+    st.caption("✅ **No Split Stacking:** Eliminates accidental dual-screens.")
+    st.caption("✅ **Anti-Collision Captions:** Positions text above lower-third graphics.")
+    st.caption("✅ **Whisper Base Engine:** Prevents word mishearing and phantom murmurs.")
+    st.caption("✅ **Punchline Lock:** Concludes strictly on sentence terminals (`. ! ?`).")
 
-st.markdown('<div class="main-header">⚡ JimiClips 4K AI Studio</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-text">Transform long-form footage into narrative-complete 4K vertical clips with zero character slicing.</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">⚡ JimiClips Studio</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-text">Automated high-retention short-form video generator with punctuation-locked punchline endings.</div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown('<div class="feature-badge"><div class="badge-title">Narrative Climax</div><div class="badge-desc">Full setup & punchline finish</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">Punchline Lock</div><div class="badge-desc">Zero mid-sentence cuts</div></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="feature-badge"><div class="badge-title">Smart Framing</div><div class="badge-desc">Zero character chopping</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">Unified Canvas</div><div class="badge-desc">No split-screen distortion</div></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown('<div class="feature-badge"><div class="badge-title">4K Canvas</div><div class="badge-desc">2160 × 3840 ultra-clarity</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">Safe-Zone Text</div><div class="badge-desc">Zero subtitle overlap</div></div>', unsafe_allow_html=True)
 with c4:
-    st.markdown('<div class="feature-badge"><div class="badge-title">Kinetic Typography</div><div class="badge-desc">Neon accents in safe zone</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="feature-badge"><div class="badge-title">Whisper Base</div><div class="badge-desc">High dialogue fidelity</div></div>', unsafe_allow_html=True)
 
 st.write("")
 st.write("")
 
 uploaded_file = st.file_uploader(
-    "Upload raw footage, stream, or video file (MP4, MOV, MKV up to 1GB):",
+    "Upload raw footage or VOD (MP4, MOV, MKV up to 1GB):",
     type=["mp4", "mov", "mkv"],
-    help="Upload your video file. The AI scans dialogue to deliver a complete punchline beat."
+    help="Upload your video file. The AI scans dialogue to find complete viral beats."
 )
 
 if uploaded_file is not None:
     size_mb = uploaded_file.size / (1024 * 1024)
     st.success(f"📁 **Source Loaded:** `{uploaded_file.name}` ({size_mb:.1f} MB)")
 
-    if st.button("🚀 Render 4K Narrative Clip", type="primary", use_container_width=True):
+    if st.button("🚀 Render High-Retention Short", type="primary", use_container_width=True):
         save_path = "uploaded_source.mp4"
         output_clip_path = "final_clip.mp4"
 
-        with st.status("🎬 Directing 4K vertical master...", expanded=True) as status:
-            st.write("📥 Streaming upload to local buffer...")
-            
+        with st.status("🎬 Directing vertical master cut...", expanded=True) as status:
+            st.write("📥 Saving video buffer...")
+
             uploaded_file.seek(0)
             with open(save_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file, f, length=4 * 1024 * 1024)
 
-            status.update(label="🧠 Analyzing dialogue flow, punchline finish & rendering 4K canvas...", state="running")
+            status.update(label="🧠 Analyzing dialogue structure, punchlines & rendering...", state="running")
 
             log_box = st.empty()
 
@@ -131,7 +124,7 @@ if uploaded_file is not None:
                 sys.executable, "bot.py",
                 save_path,
                 str(target_duration),
-                selected_framing
+                framing_mode
             ]
 
             process = subprocess.Popen(
@@ -151,13 +144,13 @@ if uploaded_file is not None:
             process.wait()
 
             if process.returncode == 0 and os.path.exists(output_clip_path):
-                status.update(label="✅ 4K clip rendered successfully!", state="complete")
+                status.update(label="✅ Short rendered successfully!", state="complete")
             else:
-                status.update(label="❌ Render encountered an issue. See logs above.", state="error")
+                status.update(label="❌ Render encountered an issue.", state="error")
 
         if os.path.exists(output_clip_path):
             st.markdown("---")
-            st.markdown("### 🏆 Your 4K Master Short is Ready")
+            st.markdown("### 🏆 Your Vertical Short is Ready")
             v_col, dl_col = st.columns([1.1, 1])
 
             with v_col:
@@ -167,17 +160,17 @@ if uploaded_file is not None:
                 st.markdown("""
                 **Applied Master Optimizations:**
                 - 🎯 **Narrative Beat:** Hook at start, clean punchline finish without mid-sentence cuts.
-                - 📐 **Format:** 2160 × 3840 (4K UHD), 9:16 portrait.
-                - 👤 **Character Framing:** Subject kept intact and framed naturally.
-                - 💬 **4K Subtitles:** Scaled kinetic pop captions centered above bottom UI safe zones.
-                - 🔊 **Studio Sound:** 320 kbps AAC stereo with dynamic limiter.
+                - 📐 **Format:** 1080x1920 (9:16) portrait.
+                - 👤 **Framing:** Single unified canvas (no horizontal chopping).
+                - 💬 **Safe-Zone Text:** Positioned above bottom UI and original graphics.
+                - 🔊 **Master Sound:** Peak limiting and dialogue compression.
                 """)
 
                 with open(output_clip_path, "rb") as f:
                     st.download_button(
-                        label="⬇️ Download 4K Master Clip",
+                        label="⬇️ Download Ready-To-Post Short",
                         data=f,
-                        file_name="jimiclip_4k_master.mp4",
+                        file_name="viral_clip_1080p.mp4",
                         mime="video/mp4",
                         type="primary",
                         use_container_width=True
