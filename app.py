@@ -1,88 +1,169 @@
 import sys
 import os
 import subprocess
-import faster_whisper
 import streamlit as st
 
 st.set_page_config(
-    page_title="JimiClips Studio",
-    page_icon="🎬",
-    layout="centered"
+    page_title="JimiClips AI Studio",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Automatically write cookies.txt from Streamlit Secrets if configured
-if "YOUTUBE_COOKIES" in st.secrets:
-    cookie_file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-    with open(cookie_file_path, "w", encoding="utf-8") as f:
-        f.write(st.secrets["YOUTUBE_COOKIES"])
+# Custom Styling for modern dark aesthetic
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.3rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #6366F1, #EC4899);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.2rem;
+    }
+    .sub-header {
+        color: #94A3B8;
+        font-size: 1.05rem;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background: #1E293B;
+        border-radius: 12px;
+        padding: 1.2rem;
+        border: 1px solid #334155;
+        text-align: center;
+    }
+    .metric-title {
+        color: #64748B;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    .metric-val {
+        color: #F8FAFC;
+        font-size: 1.3rem;
+        font-weight: 700;
+        margin-top: 0.3rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("🎬 JimiClips AI Video Studio")
-st.markdown("Transform long-form content into high-definition vertical shorts (1080p, Lanczos, CRF 18).")
+# Sidebar: Studio Configuration
+with st.sidebar:
+    st.image("https://img.icons8.com/fluency/96/film-reel.png", width=64)
+    st.markdown("### ⚙️ Video Engine Settings")
+    
+    clip_duration = st.slider("Clip Duration (seconds)", min_value=15, max_value=60, value=30, step=5)
+    start_offset = st.number_input("Start Time Offset (seconds)", min_value=0, value=0, step=5)
+    
+    st.markdown("---")
+    st.markdown("### 🎨 Visual Fidelity")
+    quality_profile = st.selectbox(
+        "Quality Preset",
+        ["Ultra-Clear (CRF 17, Slow, Pristine)", "Balanced (CRF 18, Fast)", "Compact (CRF 22)"],
+        index=0
+    )
+    
+    crf_map = {
+        "Ultra-Clear (CRF 17, Slow, Pristine)": "17",
+        "Balanced (CRF 18, Fast)": "18",
+        "Compact (CRF 22)": "22"
+    }
+    selected_crf = crf_map[quality_profile]
+    
+    st.caption("⚡ Powered by FFmpeg Lanczos 9:16 Resampling & Faster-Whisper.")
 
-tab_upload, tab_url = st.tabs(["📁 Upload Local Video File (Recommended)", "🔗 Paste YouTube URL"])
+# Main Dashboard
+st.markdown('<div class="main-header">⚡ JimiClips AI Studio</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Convert high-bitrate landscape master files into cinema-grade 1080x1920 vertical shorts.</div>', unsafe_allow_html=True)
 
-target_input = None
+# Highlight Metrics
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.markdown('<div class="metric-card"><div class="metric-title">Max Upload</div><div class="metric-val">1024 MB (1 GB)</div></div>', unsafe_allow_html=True)
+with col2:
+    st.markdown('<div class="metric-card"><div class="metric-title">Output Canvas</div><div class="metric-val">1080 × 1920 (9:16)</div></div>', unsafe_allow_html=True)
+with col3:
+    st.markdown('<div class="metric-card"><div class="metric-title">Scaling Algorithm</div><div class="metric-val">Lanczos Spline</div></div>', unsafe_allow_html=True)
 
-with tab_upload:
-    st.caption("Direct upload is immune to YouTube's cloud datacenter IP blocks.")
-    uploaded_file = st.file_uploader("Upload an MP4, MOV, or MKV file:", type=["mp4", "mov", "mkv"])
-    if uploaded_file is not None:
+st.write("")
+st.write("")
+
+# Upload Container
+uploaded_file = st.file_uploader(
+    "Drag and drop your long-form video file (MP4, MOV, MKV)",
+    type=["mp4", "mov", "mkv", "avi"],
+    help="Supports master files up to 1GB."
+)
+
+if uploaded_file is not None:
+    file_size_mb = uploaded_file.size / (1024 * 1024)
+    st.info(f"📁 **Source Loaded:** `{uploaded_file.name}` ({file_size_mb:.1f} MB)")
+    
+    col_btn, _ = st.columns([1, 3])
+    with col_btn:
+        generate_clicked = st.button("🚀 Render 1080p Vertical Short", type="primary", use_container_width=True)
+
+    if generate_clicked:
         save_path = "uploaded_source.mp4"
-        with open(save_path, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        target_input = save_path
-        st.success("File uploaded and ready for processing.")
-
-with tab_url:
-    st.caption("Works if your cookies.txt is valid or YouTube has not flagged the current cloud node.")
-    url_val = st.text_input("YouTube Video URL:", placeholder="https://www.youtube.com/watch?v=...")
-    if url_val.strip() and not target_input:
-        target_input = url_val.strip()
-
-if st.button("Generate Clip", type="primary"):
-    if not target_input:
-        st.warning("Please provide a video file or YouTube URL first.")
-    else:
-        status_box = st.empty()
-        log_box = st.empty()
-        status_box.info("Running JimiClips pipeline...")
-
-        cmd = [sys.executable, "bot.py", target_input]
-        
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1
-        )
-
-        full_logs = ""
         output_clip_path = "final_clip.mp4"
-
-        for line in iter(process.stdout.readline, ''):
-            full_logs += line
-            log_box.code(full_logs[-1500:], language="bash")
         
-        process.stdout.close()
-        process.wait()
-
-        if process.returncode == 0 and os.path.exists(output_clip_path):
-            status_box.success("Clip created successfully!")
-            st.video(output_clip_path)
+        # Stream file to disk in 8MB chunks to keep RAM consumption low
+        with st.status("📥 Saving source to disk buffer...", expanded=True) as status:
+            with open(save_path, "wb") as f:
+                while chunk := uploaded_file.read(8 * 1024 * 1024):
+                    f.write(chunk)
             
-            with open(output_clip_path, "rb") as f:
-                st.download_button(
-                    label="⬇️ Download High-Res Vertical Clip",
-                    data=f,
-                    file_name="jimiclip_final.mp4",
-                    mime="video/mp4"
-                )
-        else:
-            if "YOUTUBE_IP_BLOCK" in full_logs or "HTTP Error 403" in full_logs:
-                status_box.error(
-                    "YouTube blocked this cloud server instance (403 Forbidden). "
-                    "Switch to the '📁 Upload Local Video File' tab to process your video directly without restrictions."
-                )
+            status.update(label="⚙️ Running JimiClips pipeline (Whisper + FFmpeg Lanczos)...", state="running")
+            
+            log_container = st.empty()
+            
+            # Execute bot.py with parameters: <input_path> <start_sec> <duration_sec> <crf>
+            cmd = [
+                sys.executable, "bot.py",
+                save_path,
+                str(start_offset),
+                str(clip_duration),
+                str(selected_crf)
+            ]
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            full_logs = ""
+            for line in iter(process.stdout.readline, ''):
+                full_logs += line
+                log_container.code(full_logs[-1200:], language="bash")
+            
+            process.stdout.close()
+            process.wait()
+            
+            if process.returncode == 0 and os.path.exists(output_clip_path):
+                status.update(label="✅ Render completed successfully!", state="complete")
             else:
-                status_box.error("Processing failed. Review the terminal logs above.")
+                status.update(label="❌ Pipeline encountered an error.", state="error")
+        
+        # Display Results
+        if os.path.exists(output_clip_path):
+            st.markdown("### 🎬 Your 1080p Master Clip is Ready")
+            res_col1, res_col2 = st.columns([1.2, 1])
+            
+            with res_col1:
+                st.video(output_clip_path)
+            
+            with res_col2:
+                st.success("✨ **Encoding Details:**\n- Resolution: 1080x1920\n- Frame Rate: 30/60 fps preserved\n- Audio: 320kbps AAC stereo\n- Compression: Visually lossless H.264")
+                with open(output_clip_path, "rb") as f:
+                    st.download_button(
+                        label="⬇️ Download High-Bitrate Clip",
+                        data=f,
+                        file_name="jimiclip_1080p.mp4",
+                        mime="video/mp4",
+                        type="primary",
+                        use_container_width=True
+                    )
