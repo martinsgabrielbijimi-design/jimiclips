@@ -6,10 +6,10 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
-    print(f"[JimiClips Cliffhanger] {msg}", flush=True)
+    print(f"[JimiClips Studio] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
-    log("Extracting audio stream...")
+    log("Extracting lossless audio stream...")
     cmd = [
         "ffmpeg", "-y",
         "-i", video_file,
@@ -22,12 +22,8 @@ def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     return audio_file
 
-def find_cliffhanger_window(audio_file, target_duration=35, min_dur=25, max_dur=45):
-    """
-    Finds a narrative arc that opens on an engaging hook, builds tension,
-    and cuts at the peak spike (cliffhanger) rather than a dead-air conclusion.
-    """
-    log("Scanning audio for tension-build and cliffhanger hook...")
+def find_cliffhanger_window(audio_file, target_duration=90):
+    log(f"Scanning audio waveform for narrative arc ({target_duration}s)...")
     sample_rate = 16000
 
     with open(audio_file, "rb") as f:
@@ -37,7 +33,7 @@ def find_cliffhanger_window(audio_file, target_duration=35, min_dur=25, max_dur=
     audio_data = np.frombuffer(raw_data, dtype=np.int16).astype(np.float32) / 32768.0
     total_sec = len(audio_data) / sample_rate
 
-    if total_sec <= max_dur:
+    if total_sec <= target_duration:
         return 0.0, total_sec
 
     step = sample_rate
@@ -49,13 +45,12 @@ def find_cliffhanger_window(audio_file, target_duration=35, min_dur=25, max_dur=
     best_start = 0
     max_escalation_score = -1.0
 
-    # Scan for windows where the ending 5 seconds have a noticeable volume/excitement surge
+    # Scan for sections with strong opening hook and sustained escalation
     for s in range(0, len(rms_profile) - window_len, 2):
         chunk = rms_profile[s : s + window_len]
-        early_energy = float(np.mean(chunk[:int(window_len * 0.4)]))
-        climax_energy = float(np.mean(chunk[-int(window_len * 0.3):]))
+        early_energy = float(np.mean(chunk[:int(window_len * 0.25)]))
+        climax_energy = float(np.mean(chunk[-int(window_len * 0.25):]))
         
-        # Escalation factor: clips that ramp up in energy toward the cut
         escalation = (climax_energy + 1e-4) / (early_energy + 1e-4)
         total_energy = float(np.sum(chunk))
         score = total_energy * min(escalation, 2.5)
@@ -64,11 +59,11 @@ def find_cliffhanger_window(audio_file, target_duration=35, min_dur=25, max_dur=
             max_escalation_score = score
             best_start = s
 
-    log(f"Locked cliffhanger segment: {best_start}s to {best_start + target_duration}s")
+    log(f"Locked story arc: {best_start}s to {best_start + target_duration}s")
     return float(best_start), float(target_duration)
 
 def transcribe_window_only(audio_file, clip_start, clip_duration):
-    log("Transcribing targeted cliffhanger window (base.en, int8)...")
+    log("Running Whisper AI on selected moment (int8 engine)...")
     sample_rate = 16000
     start_byte = 44 + int(clip_start * sample_rate * 2)
     len_bytes = int(clip_duration * sample_rate * 2)
@@ -109,7 +104,7 @@ PlayResY: 1920
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Impact,76,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,6,3,2,80,80,920,1
 Style: Highlight,Impact,82,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,106,106,1,0,1,7,4,2,80,80,920,1
-Style: OutroCTA,Impact,72,&H0000FFFF,&H000000FF,&H00000000,&HB0000000,-1,0,0,0,100,100,1,0,1,6,4,2,60,60,780,1
+Style: OutroCTA,Impact,70,&H0000FFFF,&H000000FF,&H00000000,&HB0000000,-1,0,0,0,100,100,1,0,1,6,4,2,60,60,820,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -122,8 +117,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         secs = t % 60
         return f"{hrs:01d}:{mins:02d}:{secs:05.2f}"
 
-    # Leave the final 1.5 seconds reserved for the curiosity CTA card
-    dialogue_cutoff = max(0.0, clip_duration - 1.5)
+    dialogue_cutoff = max(0.0, clip_duration - 1.8)
 
     for seg in segments:
         s_start = max(0.0, seg["start"])
@@ -155,25 +149,21 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             events.append(f"Dialogue: 0,{format_time(sub_start)},{format_time(sub_end)},Default,,0,0,0,,{' '.join(formatted)}")
 
-    # Add curiosity CTA prompt during the final 1.8 seconds
-    cta_start = max(0.0, clip_duration - 1.8)
-    events.append(f"Dialogue: 1,{format_time(cta_start)},{format_time(clip_duration)},OutroCTA,,0,0,0,,WATCH FULL VIDEO FOR WHAT HAPPENED NEXT...")
+    # Ending callout hook
+    cta_start = max(0.0, clip_duration - 2.0)
+    events.append(f"Dialogue: 1,{format_time(cta_start)},{format_time(clip_duration)},OutroCTA,,0,0,0,,WATCH FULL VIDEO FOR PART 2...")
 
     with open(ass_path, "w", encoding="utf-8") as f:
         f.write(header + "\n".join(events) + "\n")
 
     return ass_path
 
-def render_cliffhanger_clip(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
-    log(f"Rendering {clip_duration:.1f}s cut with smooth audio decrescendo & visual fade...")
-
-    # Soft transition settings
-    fade_len = 0.6
+def render_vertical_clip(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
+    log(f"Rendering 1080x1920 portrait master ({clip_duration:.1f}s)...")
+    
+    fade_len = 0.8
     fade_start = max(0.0, clip_duration - fade_len)
 
-    # 1. Unified 9:16 center crop (no split screen)
-    # 2. Subtitles with outro prompt
-    # 3. Smooth fade-out at the end to prevent abrupt jarring cutoff
     filter_complex = (
         f"[0:v]crop=ih*(9/16):ih,scale=1080:1920:flags=bicubic,"
         f"eq=saturation=1.08:contrast=1.03,"
@@ -198,17 +188,17 @@ def render_cliffhanger_clip(input_video, clip_start, clip_duration, ass_file, ou
         "-threads", "1",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "160k",
+        "-b:a", "192k",
         "-ar", "44100",
         output_clip
     ]
 
     subprocess.run(cmd, check=True)
-    log(f"Export completed cleanly -> {output_clip}")
+    log(f"Export successful -> {output_clip}")
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
-    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 35
+    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 90
 
     audio_path = "extracted.wav"
     ass_path = "subtitles.ass"
@@ -225,7 +215,9 @@ def main():
     clip_start, clip_duration = find_cliffhanger_window(audio_path, target_duration=target_dur)
     segments = transcribe_window_only(audio_path, clip_start, clip_duration)
     generate_safe_subtitles(segments, clip_duration, ass_path)
-    render_cliffhanger_clip(input_file, clip_start, clip_duration, ass_path, output_clip)
+    render_vertical_clip(input_file, clip_start, clip_duration, ass_path, output_clip)
+
+    log("Workflow finished.")
 
 if __name__ == "__main__":
     main()
