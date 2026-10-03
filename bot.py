@@ -9,7 +9,7 @@ def log(msg):
     print(f"[JimiClips Engine] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
-    log("Extracting high-precision 16kHz audio stream...")
+    log("Extracting lossless 16kHz audio stream...")
     cmd = [
         "ffmpeg", "-y",
         "-i", video_file,
@@ -52,11 +52,7 @@ def transcribe_audio_full(audio_file):
     log(f"Transcription complete: {len(segments)} segments mapped.")
     return segments, audio_np
 
-def find_narrative_boundary(segments, audio_np, target_duration=52, min_dur=40, max_dur=58):
-    """
-    Selects a continuous clip that opens on a strong hook and closes
-    strictly on a finished sentence (. ! ?), preventing mid-word cutoff.
-    """
+def find_narrative_boundary(segments, audio_np, target_duration=50, min_dur=35, max_dur=58):
     log("Calculating narrative boundary with punctuation lock...")
     sample_rate = 16000
     total_seconds = len(audio_np) / sample_rate
@@ -91,13 +87,12 @@ def find_narrative_boundary(segments, audio_np, target_duration=52, min_dur=40, 
 
             score = energy * 100.0
             if has_terminal:
-                score *= 1.6  # Strongly reward clean thought completion
+                score *= 1.6
 
             if score > highest_score:
                 highest_score = score
                 best_start = start_t
-                best_end = e_seg["end"] + 0.35  # Padding for final consonant
-                # Clean verdict from the last sentence
+                best_end = e_seg["end"] + 0.35
                 clean_end_text = re.sub(r'[^\w\s]', '', e_seg["text"]).strip().upper()
                 if len(clean_end_text.split()) > 7:
                     clean_end_text = " ".join(clean_end_text.split()[-6:])
@@ -108,12 +103,10 @@ def find_narrative_boundary(segments, audio_np, target_duration=52, min_dur=40, 
     log(f"Locked clip: {best_start:.2f}s to {best_end:.2f}s ({final_dur:.2f}s)")
     return best_start, final_dur, best_verdict
 
-def generate_transformative_ass(segments, clip_start, clip_duration, verdict_text, ass_path="subtitles.ass"):
+def generate_sleek_ass(segments, clip_start, clip_duration, verdict_text, ass_path="subtitles.ass"):
     """
-    Generates dynamic visuals that completely eliminate the dead-space bottom card:
-    - Kinetic Word Captions in Upper Safe Zone (MarginV: 960)
-    - Dynamic Insight Cards on the Data Deck (MarginV: 350-550)
-    - Natural Context-Aware Terminal Verdict Card (Final 2.5s)
+    Subtitles sit naturally over the video (MarginV: 480).
+    The bottom compact HUD bar sits in the lower 22% (MarginV: 80 - 240).
     """
     header = """[Script Info]
 ScriptType: v4.00+
@@ -122,12 +115,12 @@ PlayResY: 1920
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: CaptionDefault,Impact,64,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,1,0,1,5,2,2,60,60,980,1
-Style: CaptionHighlight,Impact,68,&H0010E010,&H000000FF,&H00000000,&H80000000,-1,0,0,0,105,105,1,0,1,6,3,2,60,60,980,1
-Style: DeckHeader,Arial,32,&H0010B981,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,2,0,1,0,0,2,60,60,780,1
-Style: DeckTitle,Impact,78,&H00F8FAFC,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,2,60,60,660,1
-Style: DeckBody,Arial,36,&H0094A3B8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,2,80,80,560,1
-Style: VerdictCard,Impact,76,&H0034D399,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,6,3,2,60,60,640,1
+Style: CaptionDefault,Impact,72,&H00FFFFFF,&H000000FF,&H00000000,&H90000000,-1,0,0,0,100,100,1,0,1,6,3,2,60,60,480,1
+Style: CaptionHighlight,Impact,78,&H002EFAF8,&H000000FF,&H00000000,&H90000000,-1,0,0,0,106,106,1,0,1,7,4,2,60,60,480,1
+Style: HUDTag,Arial,28,&H0010B981,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,2,0,1,0,0,2,60,60,260,1
+Style: HUDTitle,Impact,58,&H00F8FAFC,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,2,60,60,180,1
+Style: HUDBody,Arial,32,&H0094A3B8,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,0,0,2,60,60,110,1
+Style: VerdictCard,Impact,64,&H0034D399,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,1,0,1,5,2,2,60,60,160,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -140,11 +133,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         secs = t % 60
         return f"{hrs:01d}:{mins:02d}:{secs:05.2f}"
 
-    # Filter rules to prevent treating 'Rule 3' or 'Step 1' as arithmetic numbers
     rule_filter = re.compile(r'(rule|step|number|point|part)\s+\d+', re.IGNORECASE)
     currency_regex = re.compile(r'(\$\d+[\d,\.]*|\b\d+%\b|\b\d+\s*(?:k|million|billion|thousand)\b)', re.IGNORECASE)
 
-    # Conceptual topic categorization for semantic cards
     concept_map = [
         (re.compile(r'(debt|loan|pay off|dues|borrow)', re.IGNORECASE), "FINANCIAL DISCIPLINE", "Eliminating liabilities before scaling"),
         (re.compile(r'(rich|wealth|mindset|lifestyle)', re.IGNORECASE), "MINDSET & BEHAVIOR", "Distinguishing true wealth from fake luxury"),
@@ -170,7 +161,6 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if not words:
             continue
 
-        # 1. Kinetic Captions in upper safe zone
         chunk_size = 3
         dur_word = (s_end - s_start) / len(words)
 
@@ -190,34 +180,31 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             events.append(f"Dialogue: 0,{format_time(w_start)},{format_time(w_end)},CaptionDefault,,0,0,0,,{' '.join(formatted)}")
 
-        # 2. Dynamic Data Deck Card Generation
         clean_text = rule_filter.sub('', text)
         matched_curr = currency_regex.search(clean_text)
 
         if matched_curr:
             fig = matched_curr.group(1).upper()
-            card_intervals.append((s_start, min(s_start + 4.0, clip_duration - 2.8), "METRIC CALLOUT", fig, text[:42] + "..."))
+            card_intervals.append((s_start, min(s_start + 4.0, clip_duration - 2.8), "METRIC CALLOUT", fig, text[:48] + "..."))
         else:
             for pattern, c_title, c_desc in concept_map:
                 if pattern.search(text):
                     card_intervals.append((s_start, min(s_start + 4.5, clip_duration - 2.8), c_title, "CORE PRINCIPLE", c_desc))
                     break
 
-    # Consolidate dynamic cards on bottom deck (avoiding overlap)
     last_end = 0.0
     for c_start, c_end, header_txt, title_txt, body_txt in card_intervals:
         if c_start < last_end:
             c_start = last_end
         if c_end - c_start < 1.5:
             continue
-        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},DeckHeader,,0,0,0,,// {header_txt}")
-        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},DeckTitle,,0,0,0,,{title_txt}")
-        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},DeckBody,,0,0,0,,{body_txt}")
+        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},HUDTag,,0,0,0,,// {header_txt}")
+        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},HUDTitle,,0,0,0,,{title_txt}")
+        events.append(f"Dialogue: 1,{format_time(c_start)},{format_time(c_end)},HUDBody,,0,0,0,,{body_txt}")
         last_end = c_end
 
-    # Phase 5: Terminal Snap Verdict (Final 2.5 seconds)
     snap_start = max(0.0, clip_duration - 2.5)
-    events.append(f"Dialogue: 2,{format_time(snap_start)},{format_time(clip_duration)},DeckHeader,,0,0,0,,// FINAL TAKEAWAY")
+    events.append(f"Dialogue: 2,{format_time(snap_start)},{format_time(clip_duration)},HUDTag,,0,0,0,,// FINAL TAKEAWAY")
     events.append(f"Dialogue: 2,{format_time(snap_start)},{format_time(clip_duration)},VerdictCard,,0,0,0,,{verdict_text}")
 
     with open(ass_path, "w", encoding="utf-8") as f:
@@ -225,20 +212,26 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     return ass_path
 
-def render_transformative_cut(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
-    log(f"Rendering 1080x1920 cut ({clip_duration:.1f}s)...")
+def render_balanced_cut(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
+    log(f"Rendering 78% video / 22% sleek HUD cut ({clip_duration:.1f}s)...")
 
-    # Audio fadeout of 0.4s right before the snap prevents mid-syllable abrupt audio pops
-    fade_len = 0.4
+    fade_len = 0.35
     fade_start = max(0.0, clip_duration - fade_len)
 
+    # 1. Base video fills top 78% (1080x1500), centered properly without slicing
+    # 2. Sleek dark acrylic card fills only the bottom 22% (1080x420)
+    # 3. Emerald accent dividing border line (1080x4)
+    # 4. Burn-in subtitles and clean HUD text
     filter_complex = (
-        f"color=c=0x0F172A:s=1080x1920:d={clip_duration}[canvas];"
-        f"[0:v]crop=ih*(16/9)*0.75:ih*0.75:in_w/2-(ih*(16/9)*0.75)/2:in_h*0.1,scale=1080:860:flags=bicubic[speaker];"
-        f"color=c=0x10B981:s=1080x4:d={clip_duration}[border];"
-        f"[canvas][speaker]overlay=0:0[stage1];"
-        f"[stage1][border]overlay=0:860[stage2];"
-        f"[stage2]ass={ass_file}[vout];"
+        f"[0:v]split=2[bg_full][fg_main];"
+        f"[bg_full]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.25[ambient_bg];"
+        f"[fg_main]crop=ih*(9/12.5):ih,scale=1080:1500:flags=bicubic[video_top];"
+        f"color=c=0x0B0F19:s=1080x420:d={clip_duration}[hud_bar];"
+        f"color=c=0x10B981:s=1080x4:d={clip_duration}[accent_line];"
+        f"[ambient_bg][video_top]overlay=0:0[stage1];"
+        f"[stage1][hud_bar]overlay=0:1500[stage2];"
+        f"[stage2][accent_line]overlay=0:1500[stage3];"
+        f"[stage3]ass={ass_file}[vout];"
         f"[0:a]volume=1.2,alimiter=limit=0.92,afade=t=out:st={fade_start}:d={fade_len}[aout]"
     )
 
@@ -267,7 +260,7 @@ def render_transformative_cut(input_video, clip_start, clip_duration, ass_file, 
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
-    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 52
+    target_dur = int(sys.argv[2]) if len(sys.argv) > 2 else 50
 
     audio_path = "extracted.wav"
     ass_path = "subtitles.ass"
@@ -283,10 +276,10 @@ def main():
     extract_audio(input_file, audio_path)
     segments, audio_np = transcribe_audio_full(audio_path)
     clip_start, clip_duration, verdict_text = find_narrative_boundary(segments, audio_np, target_duration=target_dur)
-    generate_transformative_ass(segments, clip_start, clip_duration, verdict_text, ass_path)
-    render_transformative_cut(input_file, clip_start, clip_duration, ass_path, output_clip)
+    generate_sleek_ass(segments, clip_start, clip_duration, verdict_text, ass_path)
+    render_balanced_cut(input_file, clip_start, clip_duration, ass_path, output_clip)
 
-    log("Execution finished.")
+    log("Execution finished successfully.")
 
 if __name__ == "__main__":
     main()
