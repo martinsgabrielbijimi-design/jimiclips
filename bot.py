@@ -6,7 +6,7 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 def log(msg):
-    print(f"[JimiClips Engine] {msg}", flush=True)
+    print(f"[JimiClips Pro] {msg}", flush=True)
 
 def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     log("Extracting lossless 16kHz audio stream...")
@@ -23,7 +23,7 @@ def extract_audio(video_file="uploaded_source.mp4", audio_file="extracted.wav"):
     return audio_file
 
 def transcribe_audio_full(audio_file):
-    log("Running Whisper transcription (base.en, int8)...")
+    log("Running Whisper AI (base.en, int8)...")
     model = WhisperModel("base.en", device="cpu", compute_type="int8", cpu_threads=2)
 
     with open(audio_file, "rb") as f:
@@ -104,10 +104,6 @@ def find_narrative_boundary(segments, audio_np, target_duration=50, min_dur=35, 
     return best_start, final_dur, best_verdict
 
 def generate_sleek_ass(segments, clip_start, clip_duration, verdict_text, ass_path="subtitles.ass"):
-    """
-    Subtitles sit naturally over the video (MarginV: 480).
-    The bottom compact HUD bar sits in the lower 22% (MarginV: 80 - 240).
-    """
     header = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1080
@@ -161,6 +157,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         if not words:
             continue
 
+        # Subtitle word-bursts (2-3 words)
         chunk_size = 3
         dur_word = (s_end - s_start) / len(words)
 
@@ -180,6 +177,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
             events.append(f"Dialogue: 0,{format_time(w_start)},{format_time(w_end)},CaptionDefault,,0,0,0,,{' '.join(formatted)}")
 
+        # Clean text of false rules like "Rule 3"
         clean_text = rule_filter.sub('', text)
         matched_curr = currency_regex.search(clean_text)
 
@@ -212,20 +210,20 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     return ass_path
 
-def render_balanced_cut(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
-    log(f"Rendering 78% video / 22% sleek HUD cut ({clip_duration:.1f}s)...")
+def render_pro_short(input_video, clip_start, clip_duration, ass_file, output_clip="final_clip.mp4"):
+    log(f"Rendering 78/22 cut with dynamic punch-in zoom & mastered audio ({clip_duration:.1f}s)...")
 
     fade_len = 0.35
     fade_start = max(0.0, clip_duration - fade_len)
 
-    # 1. Base video fills top 78% (1080x1500), centered properly without slicing
-    # 2. Sleek dark acrylic card fills only the bottom 22% (1080x420)
-    # 3. Emerald accent dividing border line (1080x4)
-    # 4. Burn-in subtitles and clean HUD text
+    # 1. 78% video / 22% sleek HUD bar
+    # 2. Dynamic Punch-In: Uses zoompan/crop expression to introduce subtle 10% punch-in zooms every 6 seconds to prevent static footage
+    # 3. Audio mastered to -1.5 dB true peak with decrescendo fadeout
     filter_complex = (
         f"[0:v]split=2[bg_full][fg_main];"
         f"[bg_full]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=20:5,eq=brightness=-0.25[ambient_bg];"
-        f"[fg_main]crop=ih*(9/12.5):ih,scale=1080:1500:flags=bicubic[video_top];"
+        f"[fg_main]crop=ih*(9/12.5):ih,scale=1080:1500:flags=bicubic,"
+        f"crop=w='iw*(1-0.08*mod(floor(t/5),2))':h='ih*(1-0.08*mod(floor(t/5),2))':x='(iw-ow)/2':y='(ih-oh)/2',scale=1080:1500[video_top];"
         f"color=c=0x0B0F19:s=1080x420:d={clip_duration}[hud_bar];"
         f"color=c=0x10B981:s=1080x4:d={clip_duration}[accent_line];"
         f"[ambient_bg][video_top]overlay=0:0[stage1];"
@@ -256,7 +254,7 @@ def render_balanced_cut(input_video, clip_start, clip_duration, ass_file, output
     ]
 
     subprocess.run(cmd, check=True)
-    log(f"Render completed -> {output_clip}")
+    log(f"Pro short render completed -> {output_clip}")
 
 def main():
     input_file = sys.argv[1] if len(sys.argv) > 1 else "uploaded_source.mp4"
@@ -277,7 +275,7 @@ def main():
     segments, audio_np = transcribe_audio_full(audio_path)
     clip_start, clip_duration, verdict_text = find_narrative_boundary(segments, audio_np, target_duration=target_dur)
     generate_sleek_ass(segments, clip_start, clip_duration, verdict_text, ass_path)
-    render_balanced_cut(input_file, clip_start, clip_duration, ass_path, output_clip)
+    render_pro_short(input_file, clip_start, clip_duration, ass_path, output_clip)
 
     log("Execution finished successfully.")
 
