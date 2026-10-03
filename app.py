@@ -5,127 +5,119 @@ import shutil
 import streamlit as st
 
 st.set_page_config(
-    page_title="JimiClips Studio",
-    page_icon="⚡",
+    page_title="JimiClips // Transformative Finance Studio",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Styling for modern dark aesthetic
+# Custom Styling
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=JetBrains+Mono:wght@600&display=swap');
     
     * {
         font-family: 'Plus Jakarta Sans', sans-serif;
     }
     
     .hero-title {
-        font-size: 2.6rem;
+        font-size: 2.4rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #10B981 0%, #6366F1 50%, #EC4899 100%);
+        background: linear-gradient(135deg, #10B981 0%, #3B82F6 50%, #EC4899 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         letter-spacing: -0.02em;
         margin-bottom: 0.2rem;
     }
     
-    .hero-subtitle {
+    .hero-sub {
         color: #94A3B8;
-        font-size: 1.1rem;
-        margin-bottom: 2rem;
-        line-height: 1.5;
+        font-size: 1.05rem;
+        margin-bottom: 1.8rem;
     }
     
-    .feature-card {
-        background: radial-gradient(circle at top left, #1E293B, #0F172A);
-        border: 1px solid #334155;
-        border-radius: 14px;
-        padding: 1.2rem;
+    .spec-card {
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        border-radius: 12px;
+        padding: 1.1rem;
         text-align: center;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
     }
     
-    .feature-icon {
-        font-size: 1.6rem;
-        margin-bottom: 0.3rem;
-    }
-    
-    .feature-name {
-        color: #F8FAFC;
-        font-weight: 700;
-        font-size: 0.95rem;
-    }
-    
-    .feature-desc {
-        color: #64748B;
+    .spec-title {
+        color: #10B981;
+        font-family: 'JetBrains Mono', monospace;
         font-size: 0.8rem;
-        margin-top: 0.2rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    
+    .spec-desc {
+        color: #F8FAFC;
+        font-size: 1.15rem;
+        font-weight: 700;
+        margin-top: 0.3rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Sidebar
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/video-editing.png", width=64)
-    st.markdown("### 🎛️ Studio Controls")
+    st.image("https://img.icons8.com/fluency/96/combo-chart.png", width=64)
+    st.markdown("### 🎛️ Transformative Architecture")
 
     target_duration = st.slider(
-        "Clip Duration",
-        min_value=30,
-        max_value=150,
-        value=90,
-        step=10,
-        help="Support for extended cuts up to 2.5 minutes (150s)."
+        "Target Duration (seconds)",
+        min_value=45,
+        max_value=58,
+        value=54,
+        help="Strictly under 58s to maximize completion percentage and monetization compliance."
     )
 
     st.markdown("---")
-    st.markdown("### ⚡ Engine Optimizations")
-    st.caption("✅ **Extended Cuts:** Process clips up to 2.5 minutes cleanly.")
-    st.caption("✅ **Pacing Engine:** Maintains narrative interest with hook & cliffhanger.")
-    st.caption("✅ **Decrescendo Ending:** Smooth audio/video fadeout instead of hard drops.")
-    st.caption("✅ **Single 9:16 Canvas:** Full portrait frame without horizontal slicing.")
+    st.markdown("### 🛡️ Monetization Compliance")
+    st.caption("✅ **Dual-Zone Canvas:** Top 45% speaker window with separating border.")
+    st.caption("✅ **Data Deck:** Bottom 55% dark slate `#0F172A` visual ledger.")
+    st.caption("✅ **Metric Callouts:** Auto-extracts figures into dynamic cards.")
+    st.caption("✅ **The Terminal Snap:** Instant cut to black on the final punchline.")
 
-# Main Page
-st.markdown('<div class="hero-title">⚡ JimiClips Studio</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">Transform long-form footage into high-retention vertical clips (up to 2.5 minutes) with animated captions and curiosity-driven edits.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-title">📊 JimiClips Studio // Transformative Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-sub">Transform third-party finance clips into original educational assets with dual-zone framing and live data ledgers.</div>', unsafe_allow_html=True)
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.markdown('<div class="feature-card"><div class="feature-icon">⏱️</div><div class="feature-name">Up to 2.5 Min</div><div class="feature-desc">Longer storyline retention</div></div>', unsafe_allow_html=True)
-with col2:
-    st.markdown('<div class="feature-card"><div class="feature-icon">🎯</div><div class="feature-name">Curiosity Hook</div><div class="feature-desc">Builds stakes automatically</div></div>', unsafe_allow_html=True)
-with col3:
-    st.markdown('<div class="feature-card"><div class="feature-icon">💬</div><div class="feature-name">Dynamic ASS Text</div><div class="feature-desc">Upper safe-zone placement</div></div>', unsafe_allow_html=True)
-with col4:
-    st.markdown('<div class="feature-card"><div class="feature-icon">🎬</div><div class="feature-name">Smooth Decrescendo</div><div class="feature-desc">Gentle fade to black</div></div>', unsafe_allow_html=True)
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.markdown('<div class="spec-card"><div class="spec-title">Canvas Format</div><div class="spec-desc">45% Cam / 55% Deck</div></div>', unsafe_allow_html=True)
+with c2:
+    st.markdown('<div class="spec-card"><div class="spec-title">Data Extraction</div><div class="spec-desc">Auto-Ledger Metrics</div></div>', unsafe_allow_html=True)
+with c3:
+    st.markdown('<div class="spec-card"><div class="spec-title">Pacing Arc</div><div class="spec-desc">5-Phase Narrative</div></div>', unsafe_allow_html=True)
+with c4:
+    st.markdown('<div class="spec-card"><div class="spec-title">Outro Physics</div><div class="spec-desc">Terminal Snap Cut</div></div>', unsafe_allow_html=True)
 
 st.write("")
 st.write("")
 
 uploaded_file = st.file_uploader(
-    "Upload raw footage or full stream (MP4, MOV, MKV up to 1GB):",
+    "Upload raw stream or video footage (MP4, MOV, MKV up to 1GB):",
     type=["mp4", "mov", "mkv"],
-    help="Upload your video file for processing."
+    help="Upload source video. The engine will locate the strongest financial arc and render the dual-zone layout."
 )
 
 if uploaded_file is not None:
     size_mb = uploaded_file.size / (1024 * 1024)
-    st.success(f"📁 **Media Ready:** `{uploaded_file.name}` ({size_mb:.1f} MB)")
+    st.success(f"📁 **VOD Ready:** `{uploaded_file.name}` ({size_mb:.1f} MB)")
 
-    if st.button("🚀 Render Extended Clip", type="primary", use_container_width=True):
+    if st.button("🚀 Render Transformative Short", type="primary", use_container_width=True):
         save_path = "uploaded_source.mp4"
         output_clip_path = "final_clip.mp4"
 
-        with st.status("🎬 Rendering vertical master cut...", expanded=True) as status:
-            st.write("📥 Buffering video to storage...")
-
+        with st.status("🎬 Directing transformative cut...", expanded=True) as status:
+            st.write("📥 Saving buffer to disk...")
+            
             uploaded_file.seek(0)
             with open(save_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file, f, length=4 * 1024 * 1024)
 
-            status.update(label=f"🧠 Extracting {target_duration}s narrative beat & rendering subtitles...", state="running")
-
+            status.update(label="🧠 Building data deck, ledger overlays & terminal snap...", state="running")
             log_box = st.empty()
 
             cmd = [
@@ -151,32 +143,32 @@ if uploaded_file is not None:
             process.wait()
 
             if process.returncode == 0 and os.path.exists(output_clip_path):
-                status.update(label="✅ Master clip created successfully!", state="complete")
+                status.update(label="✅ Transformative short complete!", state="complete")
             else:
-                status.update(label="❌ Pipeline encountered an error.", state="error")
+                status.update(label="❌ Pipeline failed. Check console logs.", state="error")
 
         if os.path.exists(output_clip_path):
             st.markdown("---")
-            st.markdown("### 🏆 Your Vertical Short is Ready")
+            st.markdown("### 🏆 Ready-To-Monetize Output")
             v_col, dl_col = st.columns([1.1, 1])
 
             with v_col:
                 st.video(output_clip_path)
 
             with dl_col:
-                st.markdown(f"""
-                **Applied Master Optimizations:**
-                - 🎯 **Story Arc:** Full {target_duration}-second progression with hook and peak.
-                - 📐 **Format:** 1080x1920 (9:16) portrait.
-                - 💬 **Dynamic Subtitles:** Placed above bottom UI overlays.
-                - 🎬 **Decrescendo Ending:** 0.8s smooth audio & video fade.
+                st.markdown("""
+                **Applied Transformative Standards:**
+                - 📐 **Dual-Zone Architecture:** Top 45% speaker window bounded by an emerald accent separator.
+                - 📊 **Dynamic Data Deck:** Bottom 55% slate board with automatic numerical callouts.
+                - 💬 **Paced Captions:** Word-burst captions kept in the upper safe zone.
+                - ⚡ **Terminal Snap:** Clean cut to black on the final punchline syllable.
                 """)
 
                 with open(output_clip_path, "rb") as f:
                     st.download_button(
-                        label="⬇️ Download High-Res Clip",
+                        label="⬇️ Download Transformative Short",
                         data=f,
-                        file_name="jimiclip_master.mp4",
+                        file_name="transformative_short_1080p.mp4",
                         mime="video/mp4",
                         type="primary",
                         use_container_width=True
