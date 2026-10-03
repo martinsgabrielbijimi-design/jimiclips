@@ -5,7 +5,7 @@ import shutil
 import streamlit as st
 
 st.set_page_config(
-    page_title="JimiClips Studio // Transformative Engine",
+    page_title="JimiClips Studio // Pro Shorts",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -62,35 +62,35 @@ st.markdown("""
 
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/combo-chart.png", width=64)
-    st.markdown("### 🎛️ Transformative Settings")
+    st.markdown("### 🎛️ Director Settings")
 
     target_duration = st.slider(
-        "Target Duration (seconds)",
+        "Clip Duration (seconds)",
         min_value=35,
-        max_value=58,
-        value=50,
+        max_value=55,
+        value=48,
         help="Locks duration to complete narrative sentences within this window."
     )
 
     st.markdown("---")
-    st.markdown("### 🛡️ Error Prevention Engine")
-    st.caption("✅ **Dynamic Data Deck:** No blank black box on bottom.")
-    st.caption("✅ **Rule Filtering:** Excludes 'Rule 3' or 'Step 1' from number callouts.")
-    st.caption("✅ **Non-Obstructive Captions:** Shifted to safe boundary.")
-    st.caption("✅ **Sentence Boundary Lock:** Prevents mid-word audio cutoff.")
+    st.markdown("### ⚡ Visual Balance")
+    st.caption("✅ **Video First:** Video occupies 78% of the frame.")
+    st.caption("✅ **Compact Lower HUD:** Only 22% dedicated to clean ticker notes.")
+    st.caption("✅ **No Giant Blue Block:** Replaced with full video presence.")
+    st.caption("✅ **Punctuation Lock:** Concludes strictly on finished sentences.")
 
-st.markdown('<div class="hero-title">⚡ JimiClips Studio // Transformative Short Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-sub">Transform video clips into monetizable educational assets with live semantic concept cards and zero dead space.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-title">⚡ JimiClips Studio // Balanced Layout</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-sub">Generate full-frame vertical clips with sleek lower-third insight bars and kinetic captions.</div>', unsafe_allow_html=True)
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown('<div class="spec-card"><div class="spec-title">Layout Architecture</div><div class="spec-desc">Speaker + Data Deck</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="spec-card"><div class="spec-title">Video Presence</div><div class="spec-desc">78% Screen Real-Estate</div></div>', unsafe_allow_html=True)
 with c2:
-    st.markdown('<div class="spec-card"><div class="spec-title">Data Cards</div><div class="spec-desc">Active Concept Deck</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="spec-card"><div class="spec-title">HUD Ticker</div><div class="spec-desc">Compact 22% Lower Bar</div></div>', unsafe_allow_html=True)
 with c3:
-    st.markdown('<div class="spec-card"><div class="spec-title">Subtitle Placement</div><div class="spec-desc">Safe-Zone Centered</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="spec-card"><div class="spec-title">Captions</div><div class="spec-desc">Center-Action Safe Zone</div></div>', unsafe_allow_html=True)
 with c4:
-    st.markdown('<div class="spec-card"><div class="spec-title">Pacing Physics</div><div class="spec-desc">Sentence-Locked Cut</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="spec-card"><div class="spec-title">Pacing</div><div class="spec-desc">Sentence-Boundary Lock</div></div>', unsafe_allow_html=True)
 
 st.write("")
 st.write("")
@@ -105,18 +105,18 @@ if uploaded_file is not None:
     size_mb = uploaded_file.size / (1024 * 1024)
     st.success(f"📁 **Source Ready:** `{uploaded_file.name}` ({size_mb:.1f} MB)")
 
-    if st.button("🚀 Render Transformative Short", type="primary", use_container_width=True):
+    if st.button("🚀 Render Balanced Short", type="primary", use_container_width=True):
         save_path = "uploaded_source.mp4"
         output_clip_path = "final_clip.mp4"
 
-        with st.status("🎬 Directing transformative cut...", expanded=True) as status:
+        with st.status("🎬 Rendering balanced vertical short...", expanded=True) as status:
             st.write("📥 Saving buffer to disk...")
 
             uploaded_file.seek(0)
             with open(save_path, "wb") as f:
                 shutil.copyfileobj(uploaded_file, f, length=4 * 1024 * 1024)
 
-            status.update(label="🧠 Analyzing dialogue, generating semantic cards & locking sentence boundary...", state="running")
+            status.update(label="🧠 Analyzing dialogue, formatting 78/22 balanced canvas & locking ending...", state="running")
             log_box = st.empty()
 
             cmd = [
@@ -142,13 +142,13 @@ if uploaded_file is not None:
             process.wait()
 
             if process.returncode == 0 and os.path.exists(output_clip_path):
-                status.update(label="✅ Transformative short complete!", state="complete")
+                status.update(label="✅ Balanced short complete!", state="complete")
             else:
                 status.update(label="❌ Pipeline failed. Check console logs.", state="error")
 
         if os.path.exists(output_clip_path):
             st.markdown("---")
-            st.markdown("### 🏆 Ready-To-Monetize Output")
+            st.markdown("### 🏆 Your Balanced Vertical Short is Ready")
             v_col, dl_col = st.columns([1.1, 1])
 
             with v_col:
@@ -157,17 +157,17 @@ if uploaded_file is not None:
             with dl_col:
                 st.markdown("""
                 **Applied Master Optimizations:**
-                - 📐 **Dual-Zone Canvas:** Top 45% speaker window bounded by an emerald accent line.
-                - 📊 **Active Data Deck:** Bottom 55% continuously populated with relevant concepts.
-                - 💬 **Safe-Zone Text:** Positioned away from speaker interaction areas.
-                - ⚡ **Sentence-Boundary Lock:** No truncated final words.
+                - 📐 **78/22 Pro Layout:** Video dominates the top 78% of the vertical frame.
+                - 📊 **Compact HUD Bar:** Bottom 22% holds clean real-time financial insight notes.
+                - 💬 **Dynamic Subtitles:** Centered cleanly in the active visual zone.
+                - ⚡ **Sentence-Boundary Lock:** No truncated final words or mid-sentence drops.
                 """)
 
                 with open(output_clip_path, "rb") as f:
                     st.download_button(
-                        label="⬇️ Download Transformative Short",
+                        label="⬇️ Download Balanced Short",
                         data=f,
-                        file_name="transformative_short_1080p.mp4",
+                        file_name="balanced_short_1080p.mp4",
                         mime="video/mp4",
                         type="primary",
                         use_container_width=True
